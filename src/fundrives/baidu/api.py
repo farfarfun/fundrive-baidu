@@ -6,9 +6,9 @@ from requests_toolbelt import MultipartEncoderMonitor
 from rich import print
 from rich.prompt import Prompt
 
-from ..common import constant
-from ..common.crypto import calu_md5
-from ..common.io import MAX_CHUNK_SIZE, RangeRequestIO
+from .common import constant
+from .common.crypto import calu_md5
+from .common.io import MAX_CHUNK_SIZE, RangeRequestIO
 from .inner import (
     CloudTask,
     FromTo,

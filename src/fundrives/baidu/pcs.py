@@ -14,11 +14,11 @@ import requests  # type: ignore
 from requests_toolbelt import MultipartEncoder, MultipartEncoderMonitor
 from typing_extensions import Literal
 
-from ..common.cache import timeout_cache
-from ..common.crypto import calu_md5, calu_sha1
-from ..common.date import now_timestamp
-from ..common.io import MAX_CHUNK_SIZE, RangeRequestIO
-from ..utils import dump_json
+from .common.cache import timeout_cache
+from .common.crypto import calu_md5, calu_sha1
+from .common.date import now_timestamp
+from .common.io import MAX_CHUNK_SIZE, RangeRequestIO
+from .utils import dump_json
 from .errors import BaiduPCSError, assert_ok
 from .phone import get_phone_model, sum_IMEI
 
