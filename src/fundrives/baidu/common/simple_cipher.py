@@ -3,8 +3,7 @@ import random
 
 def crypt(data, byte_map, len_):
     for i in range(len_):
-        c = data[i]
-        data[i] = byte_map[c]
+        data[i] = byte_map[data[i]]
 
 
 class SimpleCryptography:
