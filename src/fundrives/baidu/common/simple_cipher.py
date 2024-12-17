@@ -1,9 +1,7 @@
 import random
-import copy
 
-cdef crypt(unsigned char *data, unsigned char *byte_map, int len_):
-    cdef unsigned int c
 
+def crypt(data, byte_map, len_):
     for i in range(len_):
         c = data[i]
         data[i] = byte_map[c]
@@ -47,4 +45,3 @@ class SimpleCryptography:
 
     def reset(self):
         pass
-
