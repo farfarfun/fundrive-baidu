@@ -1,9 +1,12 @@
+import os
+from collections import deque
 from io import BytesIO
-from typing import IO, Callable, Dict, List, Optional, Tuple
+from pathlib import Path, PurePosixPath
+from typing import IO, Callable, Dict, List, Optional, Set, Tuple
 
+from funutil import getLogger
 from PIL import Image
 from requests_toolbelt import MultipartEncoderMonitor
-from rich import print
 from rich.prompt import Prompt
 
 from .common import constant
@@ -23,6 +26,28 @@ from .inner import (
     PcsUserProduct,
 )
 from .pcs import BaiduPCS, BaiduPCSError, M3u8Type
+
+logger = getLogger("fundrive")
+
+SHARED_URL_PREFIX = "https://pan.baidu.com/s/"
+
+
+def _unify_shared_url(url: str) -> str:
+    """Unify input shared url"""
+
+    # For Standard url
+    temp = r"pan\.baidu\.com/s/(.+?)(\?|$)"
+    m = re.search(temp, url)
+    if m:
+        return SHARED_URL_PREFIX + m.group(1)
+
+    # For surl url
+    temp = r"baidu\.com.+?\?surl=(.+?)(\?|$)"
+    m = re.search(temp, url)
+    if m:
+        return SHARED_URL_PREFIX + "1" + m.group(1)
+
+    raise ValueError(f"The shared url is not a valid url. {url}")
 
 
 class BaiduPCSApi:
@@ -391,9 +416,9 @@ class BaiduPCSApi:
                     raise err
                 if show_vcode:
                     if err.error_code == -62:  # -62: '可能需要输入验证码'
-                        print("[yellow]Need vcode![/yellow]")
+                        logger.warning("Need vcode!")
                     if err.error_code == -9:
-                        print("[red]vcode is incorrect![/red]")
+                        logger.warning("vcode is incorrect!")
                     vcode_str, vcode_img_url = self.getcaptcha(shared_url)
                     img_cn = self.get_vcode_img(vcode_img_url, shared_url)
                     img_buf = BytesIO(img_cn)
@@ -406,7 +431,6 @@ class BaiduPCSApi:
 
     def getcaptcha(self, shared_url: str) -> Tuple[str, str]:
         """Get one vcode information
-
         Return `vcode_str`, `vcode_img_url`"""
 
         info = self._baidupcs.getcaptcha(shared_url)
@@ -539,7 +563,8 @@ class BaiduPCSApi:
         return pds, level
 
     def download_link(self, remotepath: str, pcs: bool = False) -> Optional[str]:
-        """Download link of the `remotepath`
+        """
+        Download link of the `remotepath`
 
         pcs (bool, default: False): If pcs is True, return the downloading pcs link
             which has a limited threshold of downstream even if the user is a svip.
@@ -648,3 +673,102 @@ class BaiduPCSApi:
             content_length=content_length,
             remotepath=pcs_file.path,
         )
+
+    def save_shared(
+        self, shared_url: str, remote_dir: str, password: Optional[str] = None
+    ):
+        shared_url = _unify_shared_url(shared_url)
+
+        if password:
+            self.access_shared(
+                shared_url,
+                password,
+            )
+
+        shared_paths = deque(self.shared_paths(shared_url))
+        _remote_dirs: Dict[PcsSharedPath, str] = dict(
+            [(sp, remote_dir) for sp in shared_paths]
+        )
+        _dir_exists: Set[str] = set()
+
+        while shared_paths:
+            shared_path = shared_paths.popleft()
+            rd = _remote_dirs[shared_path]
+
+            # Make sure remote dir exists
+            if rd not in _dir_exists:
+                if not self.exists(rd):
+                    self.makedir(rd)
+                _dir_exists.add(rd)
+
+            if shared_path.is_file and self.remote_path_exists(
+                PurePosixPath(shared_path.path).name, rd
+            ):
+                logger.warning(f"{shared_path.path} has be in {rd}")
+                continue
+
+            uk, share_id, bdstoken = (
+                shared_path.uk,
+                shared_path.share_id,
+                shared_path.bdstoken,
+            )
+
+            try:
+                self.transfer_shared_paths(
+                    rd, [shared_path.fs_id], uk, share_id, bdstoken, shared_url
+                )
+                logger.info(f"save: {shared_path.path} to {rd}")
+                continue
+            except BaiduPCSError as err:
+                if err.error_code == 12:
+                    logger.warning(
+                        f"error_code: {err.error_code},文件已经存在, {shared_path.path} has be in {rd}"
+                    )
+                elif err.error_code == -32:
+                    logger.error(f"error_code:{err.error_code} 剩余空间不足，无法转存")
+                elif err.error_code == -33:
+                    logger.error(
+                        f"error_code:{err.error_code} 一次支持操作999个，减点试试吧"
+                    )
+                elif err.error_code == 4:
+                    logger.error(
+                        f"error_code:{err.error_code} share transfer pcs error"
+                    )
+                elif err.error_code == 130:
+                    logger.error(f"error_code:{err.error_code} 转存文件数超限")
+                elif err.error_code == 120:
+                    logger.error(f"error_code:{err.error_code} 转存文件数超限")
+                else:
+                    logger.error(f"error_code:{err.error_code}:{err}")
+                    raise err
+
+            if shared_path.is_dir:
+                sub_paths = self.list_all_sub_paths(
+                    shared_path.path, uk, share_id, bdstoken
+                )
+                rd = (Path(rd) / os.path.basename(shared_path.path)).as_posix()
+                for sp in sub_paths:
+                    _remote_dirs[sp] = rd
+                shared_paths.extendleft(sub_paths[::-1])
+
+    def remote_path_exists(
+        self, name: str, rd: str, _cache: Dict[str, Set[str]] = {}
+    ) -> bool:
+        names = _cache.get(rd)
+        if not names:
+            names = set([PurePosixPath(sp.path).name for sp in self.list(rd)])
+            _cache[rd] = names
+        return name in names
+
+    def list_all_sub_paths(
+        self, shared_path: str, uk: int, share_id: int, bdstoken: str, size=100
+    ) -> List[PcsSharedPath]:
+        sub_paths = []
+        for page in range(1, 1000):
+            sps = self.list_shared_paths(
+                shared_path, uk, share_id, bdstoken, page=page, size=size
+            )
+            sub_paths += sps
+            if len(sps) < 100:
+                break
+        return sub_paths
