@@ -3,7 +3,7 @@ from collections import deque
 from io import BytesIO
 from pathlib import Path, PurePosixPath
 from typing import IO, Callable, Dict, List, Optional, Set, Tuple
-
+import re
 from funutil import getLogger
 from PIL import Image
 from requests_toolbelt import MultipartEncoderMonitor
