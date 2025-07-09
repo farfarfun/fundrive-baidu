@@ -223,9 +223,9 @@ class BaiduPCS:
         return resp.json()
 
     def meta(self, *remotepaths: str):
-        assert all(
-            [p.startswith("/") for p in remotepaths]
-        ), "`remotepaths` must be absolute paths"
+        assert all([p.startswith("/") for p in remotepaths]), (
+            "`remotepaths` must be absolute paths"
+        )
 
         param = [{"path": p} for p in remotepaths]
         return self.file_operate("meta", param)
@@ -455,9 +455,9 @@ class BaiduPCS:
         `dest` must be a directory
         """
 
-        assert len(remotepaths) > 1 and all(
-            [p.startswith("/") for p in remotepaths]
-        ), "`sources`, `dest` must be absolute paths"
+        assert len(remotepaths) > 1 and all([p.startswith("/") for p in remotepaths]), (
+            "`sources`, `dest` must be absolute paths"
+        )
 
         sources, dest = remotepaths[:-1], remotepaths[-1]
 
@@ -477,9 +477,9 @@ class BaiduPCS:
     def rename(self, source: str, dest: str):
         """Rename `source` to `dest`"""
 
-        assert all(
-            [p.startswith("/") for p in [source, dest]]
-        ), "`source`, `dest` must be absolute paths"
+        assert all([p.startswith("/") for p in [source, dest]]), (
+            "`source`, `dest` must be absolute paths"
+        )
 
         param = [_from_to(source, dest)]
         return self.file_operate("move", param)
@@ -494,9 +494,9 @@ class BaiduPCS:
         `dest` must be a directory
         """
 
-        assert len(remotepaths) > 1 and all(
-            [p.startswith("/") for p in remotepaths]
-        ), "`sources`, `dest` must be absolute paths"
+        assert len(remotepaths) > 1 and all([p.startswith("/") for p in remotepaths]), (
+            "`sources`, `dest` must be absolute paths"
+        )
 
         sources, dest = remotepaths[:-1], remotepaths[-1]
 
@@ -514,9 +514,9 @@ class BaiduPCS:
 
     @assert_ok
     def remove(self, *remotepaths: str):
-        assert all(
-            [p.startswith("/") for p in remotepaths]
-        ), "`sources`, `dest` must be absolute paths"
+        assert all([p.startswith("/") for p in remotepaths]), (
+            "`sources`, `dest` must be absolute paths"
+        )
 
         param = [{"path": p} for p in remotepaths]
         return self.file_operate("delete", param)

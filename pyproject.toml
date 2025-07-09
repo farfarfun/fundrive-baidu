@@ -1,13 +1,30 @@
 [project]
 name = "fundrive-baidu"
-version = "1.0.9"
+version = "1.0.10"
 description = "fundrive"
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [ "aget>=0.2.0", "chardet>=5.2.0", "click>=8.1.7", "cryptography>=44.0.0", "cython>=3.0.11", "funutil>=1.0.43", "jinja2>=3.1.4", "passlib>=1.7.4", "pillow>=10.4.0", "requests>=2.32.3", "requests-toolbelt>=1.0.0", "rich>=13.9.4", "typing-extensions>=4.12.2",]
 [[project.authors]]
-name = "niuliangtao"
+name = "牛哥"
+email = "niuliangtao@qq.com"
+
+[[project.authors]]
+name = "farfarfun"
 email = "farfarfun@qq.com"
+
+[[project.maintainers]]
+name = "牛哥"
+email = "niuliangtao@qq.com"
+
+[[project.maintainers]]
+name = "farfarfun"
+email = "farfarfun@qq.com"
+
+[project.urls]
+Organization = "https://github.com/farfarfun"
+Repository = "https://github.com/farfarfun/fundrive-baidu"
+Releases = "https://github.com/farfarfun/fundrive-baidu/releases"
 
 [tool.setuptools]
 license-files = []
