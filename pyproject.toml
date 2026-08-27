@@ -28,3 +28,6 @@ Releases = "https://github.com/farfarfun/fundrive-baidu/releases"
 
 [tool.setuptools]
 license-files = []
+
+[dependency-groups]
+dev = [ "pytest>=7.0", "tomli>=2.0; python_version < '3.11'",]
