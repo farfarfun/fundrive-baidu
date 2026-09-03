@@ -1,7 +1,7 @@
-from typing import Iterator
-from pathlib import Path
 import os
+from collections.abc import Iterator
 from os import PathLike
+from pathlib import Path
 
 from .platform import IS_WIN
 

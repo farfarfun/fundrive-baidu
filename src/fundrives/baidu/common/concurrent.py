@@ -1,6 +1,7 @@
-from typing import Optional, Callable, Any
+from collections.abc import Callable
 from functools import wraps
 from threading import Semaphore
+from typing import Any
 
 
 def sure_release(semaphore: Semaphore, func, *args, **kwargs):
@@ -10,7 +11,7 @@ def sure_release(semaphore: Semaphore, func, *args, **kwargs):
         semaphore.release()
 
 
-def retry(times: int, except_callback: Optional[Callable[..., Any]] = None):
+def retry(times: int, except_callback: Callable[..., Any] | None = None):
     """Retry times when func fails"""
 
     def wrap(func):

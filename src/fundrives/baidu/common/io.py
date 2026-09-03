@@ -1,7 +1,7 @@
 import hashlib
-import logging
 import os
 import time
+from collections.abc import Callable, Generator
 from enum import Enum
 from io import BytesIO, UnsupportedOperation
 from pathlib import Path
@@ -9,18 +9,12 @@ from random import Random
 from typing import (
     IO,
     Any,
-    Callable,
-    Dict,
-    Generator,
-    List,
-    Optional,
-    Tuple,
-    Union,
     cast,
 )
 from zlib import crc32
 
 import requests  # type: ignore
+from farlog import getLogger
 from requests import Response
 
 from . import constant
@@ -42,13 +36,13 @@ from .crypto import (
     random_bytes,
     random_sys_bytes,
 )
-from .log import LogLevels, TLogLevel, get_logger
 from .number import u8x8_to_u64, u64_to_u8x8
 
+_VALID_LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
 _LOG_LEVEL = os.getenv("LOG_LEVEL", "CRITICAL").upper()
-if _LOG_LEVEL not in LogLevels:
+if _LOG_LEVEL not in _VALID_LOG_LEVELS:
     _LOG_LEVEL = "CRITICAL"
-logger = get_logger(__name__, level=cast(TLogLevel, _LOG_LEVEL))
+logger = getLogger(__name__, level=_LOG_LEVEL)
 
 READ_SIZE = 65535
 
@@ -104,7 +98,7 @@ class ChunkIO(IO):
     def __len__(self) -> int:
         return self._size
 
-    def read(self, size: int = -1) -> Optional[bytes]:
+    def read(self, size: int = -1) -> bytes | None:
         remain = self._size - self._offset
         if size == -1:
             size = remain
@@ -123,7 +117,6 @@ class ChunkIO(IO):
         if whence == 0:
             if offset < 0:
                 raise ValueError(f"Negative seek position {offset}")
-            pass
         elif whence == 1:
             offset += self._offset
         elif whence == 2:
@@ -161,7 +154,7 @@ def sample_data(io: IO, rg: Random, size: int) -> bytes:
     return data
 
 
-def rapid_upload_params(io: IO) -> Tuple[str, str, int, int]:
+def rapid_upload_params(io: IO) -> tuple[str, str, int, int]:
     io_len = 0
     chunk_size = constant.OneM
     crc32_v = 0
@@ -199,7 +192,7 @@ def rapid_upload_params(io: IO) -> Tuple[str, str, int, int]:
     return slice_md5, content_md5, content_crc32, io_len
 
 
-def rapid_upload_params2(localPath: Path) -> Tuple[str, str, int, int]:
+def rapid_upload_params2(localPath: Path) -> tuple[str, str, int, int]:
     buf = localPath.open("rb").read(constant.OneM)
     slice_md5 = calu_md5(buf[: 256 * constant.OneK])
     content_crc32, content_md5 = calu_crc32_and_md5(localPath.open("rb"), constant.OneM)
@@ -320,7 +313,7 @@ class EncryptIO(IO):
     def __len__(self) -> int:
         return self._total_head_len + self._io_len
 
-    def read(self, size: int = -1) -> Optional[bytes]:
+    def read(self, size: int = -1) -> bytes | None:
         """The read only imply to stream cipher"""
 
         if self._offset < self._total_head_len:
@@ -360,7 +353,6 @@ class EncryptIO(IO):
         if whence == 0:
             if offset < 0:
                 raise ValueError(f"Negative seek position {offset}")
-            pass
         elif whence == 1:
             offset += self._offset
         elif whence == 2:
@@ -526,7 +518,7 @@ class AES256CBCEncryptIO(EncryptIO):
             self._encrypted_cache = self._encrypted_cache[size:]
         return data
 
-    def read(self, size: int = -1) -> Optional[bytes]:
+    def read(self, size: int = -1) -> bytes | None:
         if self._offset < self._total_head_len:
             if size < 0:
                 data = self.total_head[self._offset :]
@@ -586,7 +578,7 @@ class DecryptIO(IO):
         self._offset = 0
         self._io_len = total_len(self._io)
 
-    def read(self, size: int = -1) -> Optional[bytes]:
+    def read(self, size: int = -1) -> bytes | None:
         data = self._io.read(size)
         if not data:
             return b""
@@ -601,7 +593,6 @@ class DecryptIO(IO):
         if whence == 0:
             if offset < 0:
                 raise ValueError(f"Negative seek position {offset}")
-            pass
         elif whence == 1:
             offset += self._offset
         elif whence == 2:
@@ -632,7 +623,7 @@ class SimpleDecryptIO(DecryptIO):
 
         self._crypto = SimpleCryptography(self._encrypt_key + self._nonce_or_iv)
 
-    def read(self, size: int = -1) -> Optional[bytes]:
+    def read(self, size: int = -1) -> bytes | None:
         data = self._io.read(size)
         if not data:
             return b""
@@ -653,7 +644,7 @@ class ChaCha20DecryptIO(DecryptIO):
 
         self._crypto = ChaCha20Cryptography(self._encrypt_key, self._nonce_or_iv)
 
-    def read(self, size: int = -1) -> Optional[bytes]:
+    def read(self, size: int = -1) -> bytes | None:
         data = self._io.read(size)
         if not data:
             return b""
@@ -733,7 +724,7 @@ class AES256CBCDecryptIO(DecryptIO):
 
         self._decrypted_cache.extend(dec_cn)
 
-    def read(self, size: int = -1) -> Optional[bytes]:
+    def read(self, size: int = -1) -> bytes | None:
         self._read_block(size)
 
         if size < 0:
@@ -749,7 +740,7 @@ class AES256CBCDecryptIO(DecryptIO):
         return False
 
 
-def parse_head(head: bytes) -> Tuple[bytes, bytes, bytes, bytes]:
+def parse_head(head: bytes) -> tuple[bytes, bytes, bytes, bytes]:
     i = len(BAIDUPCS_PY_CRYPTO_MAGIC_CODE)
     return (
         head[:i],
@@ -761,7 +752,7 @@ def parse_head(head: bytes) -> Tuple[bytes, bytes, bytes, bytes]:
 
 def _decryptio_version1(
     total_head: bytes, io: IO, encrypt_password: bytes
-) -> Optional[DecryptIO]:
+) -> DecryptIO | None:
     encrypt_password = padding_key(encrypt_password, 32)
 
     if len(total_head) < ENCRYPT_HEAD_LEN:
@@ -782,13 +773,13 @@ def _decryptio_version1(
     elif magic_code == AES256CBCEncryptIO.MAGIC_CODE:
         return AES256CBCDecryptIO(io, encrypt_password, nonce_or_iv, total_origin_len)
     else:
-        logging.warning(f"Unknown magic_code: {magic_code!r}")
+        logger.warning(f"Unknown magic_code: {magic_code!r}")
         return None
 
 
 def _decryptio_version3(
     total_head: bytes, io: IO, encrypt_password: bytes
-) -> Optional[DecryptIO]:
+) -> DecryptIO | None:
     if len(total_head) < PADDED_ENCRYPT_HEAD_WITH_SALT_LEN:
         return None
 
@@ -820,7 +811,7 @@ def _decryptio_version3(
     elif magic_code == AES256CBCEncryptIO.MAGIC_CODE:
         eio = AES256CBCDecryptIO(io, encrypt_key, nonce_or_iv, total_origin_len)
     else:
-        logging.warning(f"Unknown magic_code: {magic_code!r}")
+        logger.warning(f"Unknown magic_code: {magic_code!r}")
         return None
 
     eio._total_head_len = PADDED_ENCRYPT_HEAD_WITH_SALT_LEN
@@ -852,7 +843,7 @@ class AutoDecryptRequest:
         self,
         method: str,
         url: str,
-        headers: Optional[Dict[str, str]] = None,
+        headers: dict[str, str] | None = None,
         max_chunk_size: int = MAX_CHUNK_SIZE,
         encrypt_password: bytes = b"",
         **kwargs,
@@ -866,7 +857,7 @@ class AutoDecryptRequest:
         self._kwargs = kwargs
         self._max_chunk_size = max_chunk_size
         self._encrypt_password = encrypt_password
-        self._dio: Optional[IO] = None
+        self._dio: IO | None = None
         self._has_encrypted = False
         self._total_head_len = 0
         self._decrypted_count = 0
@@ -875,11 +866,11 @@ class AutoDecryptRequest:
         # Rapid Upload Infos
         #
         # Total raw content length
-        self._content_length: Optional[int] = None
+        self._content_length: int | None = None
         # Total raw content md5
-        self._content_md5: Optional[str] = None
+        self._content_md5: str | None = None
         # Total raw content crc32
-        self._content_crc32: Optional[int] = None
+        self._content_crc32: int | None = None
 
     def _init(self):
         """Initiate request info"""
@@ -901,7 +892,7 @@ class AutoDecryptRequest:
         return self._content_length
 
     @property
-    def content_md5(self) -> Optional[str]:
+    def content_md5(self) -> str | None:
         """Remote content length"""
 
         self._init()
@@ -909,7 +900,7 @@ class AutoDecryptRequest:
         return self._content_md5
 
     @property
-    def content_crc32(self) -> Optional[int]:
+    def content_crc32(self) -> int | None:
         """Remote content length"""
 
         self._init()
@@ -946,7 +937,7 @@ class AutoDecryptRequest:
                     )
         self._parsed = True
 
-    def _request(self, _range: Tuple[int, int]) -> Response:
+    def _request(self, _range: tuple[int, int]) -> Response:
         headers = dict(self._headers or {})
         headers["Range"] = "bytes={}-{}".format(*_range)
 
@@ -978,10 +969,10 @@ class AutoDecryptRequest:
                     self.__class__.__name__,
                     err,
                 )
-                raise IOError(f"{self.__class__.__name__} - Request Error") from err
+                raise OSError(f"{self.__class__.__name__} - Request Error") from err
 
         if not resp.ok:
-            raise IOError(
+            raise OSError(
                 f"{self.__class__.__name__} - Response is not ok: "
                 f"status_code: {resp.status_code}, body: {resp.content[:1000]}"
             )
@@ -1005,7 +996,7 @@ class AutoDecryptRequest:
         assert self._content_length
         return self._content_length - self._total_head_len
 
-    def read(self, _range: Tuple[int, int]) -> Generator[bytes, None, None]:
+    def read(self, _range: tuple[int, int]) -> Generator[bytes, None, None]:
         self._init()
 
         start, end = _range
@@ -1040,7 +1031,7 @@ class AutoDecryptRequest:
                     else:
                         yield buf
 
-    def _split_chunk(self, start: int, end: int) -> List[Tuple[int, int]]:
+    def _split_chunk(self, start: int, end: int) -> list[tuple[int, int]]:
         """Split the chunks for range header
 
         Echo chunk has the length at most `self._max_chunk_size`.
@@ -1057,7 +1048,7 @@ class RangeRequestIO(IO):
         self,
         method: str,
         url: str,
-        headers: Optional[Dict[str, str]] = None,
+        headers: dict[str, str] | None = None,
         max_chunk_size: int = MAX_CHUNK_SIZE,
         callback: Callable[..., None] = None,
         encrypt_password: bytes = b"",
@@ -1089,7 +1080,7 @@ class RangeRequestIO(IO):
     def __len__(self) -> int:
         return len(self._auto_decrypt_request)
 
-    def read(self, size: int = -1) -> Optional[bytes]:
+    def read(self, size: int = -1) -> bytes | None:
         if size == 0:
             return b""
 
@@ -1152,7 +1143,7 @@ class EncryptType(Enum):
             raise ValueError(f"Unknown EncryptType: {self}")
 
 
-def reset_encrypt_io(io: Union[IO, EncryptIO]):
+def reset_encrypt_io(io: IO | EncryptIO):
     if isinstance(io, EncryptIO):
         io.reset()
     else:

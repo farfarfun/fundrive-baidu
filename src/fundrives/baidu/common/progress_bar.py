@@ -1,14 +1,12 @@
-from typing import Optional
-
 from rich.progress import (
-    Progress,
-    SpinnerColumn,
-    TextColumn,
     BarColumn,
     DownloadColumn,
-    TransferSpeedColumn,
-    TimeRemainingColumn,
+    Progress,
+    SpinnerColumn,
     TaskID,
+    TextColumn,
+    TimeRemainingColumn,
+    TransferSpeedColumn,
 )
 
 _progress = Progress(
@@ -35,7 +33,7 @@ def exit_progress_bar():
         _progress.stop()
 
 
-def progress_task_exists(task_id: Optional[TaskID]) -> bool:
+def progress_task_exists(task_id: TaskID | None) -> bool:
     if task_id is None:
         return False
     return task_id in _progress.task_ids

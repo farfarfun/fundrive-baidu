@@ -1,14 +1,14 @@
 import time
 from collections import UserDict
 from functools import _make_key, wraps
-from typing import Any, Dict
+from typing import Any
 
 
 class TimeoutCache(UserDict):
     def __init__(self, timeout: int):
         super().__init__()
         self._timeout = timeout
-        self._last_used: Dict[Any, float] = {}
+        self._last_used: dict[Any, float] = {}
 
     def __getitem__(self, key):
         val = super().__getitem__(key)

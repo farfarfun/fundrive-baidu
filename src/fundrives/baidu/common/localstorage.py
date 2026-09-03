@@ -1,10 +1,8 @@
-from typing import Optional, List, Dict, Any
-
+import builtins
 import os
-from collections import OrderedDict
-
 import sqlite3
-
+from collections import OrderedDict
+from typing import Any
 
 RAPID_UPLOAD_TABLE = "rapid_upload"
 
@@ -79,13 +77,13 @@ class RapidUploadInfo:
         content_md5: str,
         content_crc32: int,  # not needed
         content_length: int,
-        filename: Optional[str] = None,
-        localpath: Optional[str] = None,
-        remotepath: Optional[str] = None,
-        encrypt_password: Optional[bytes] = None,
-        encrypt_type: Optional[str] = None,
-        user_id: Optional[int] = None,
-        user_name: Optional[str] = None,
+        filename: str | None = None,
+        localpath: str | None = None,
+        remotepath: str | None = None,
+        encrypt_password: bytes | None = None,
+        encrypt_type: str | None = None,
+        user_id: int | None = None,
+        user_name: str | None = None,
     ):
         """Insert a rapid upload info"""
 
@@ -110,7 +108,7 @@ class RapidUploadInfo:
 
     def list(
         self,
-        ids: List[int] = [],
+        ids: list[int] = [],
         by_filename: bool = False,
         by_time: bool = False,
         by_size: bool = False,
@@ -121,7 +119,7 @@ class RapidUploadInfo:
         desc: bool = False,
         limit: int = 0,
         offset: int = -1,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """List records by condition
 
         Default order by record_time and desc
@@ -175,7 +173,7 @@ class RapidUploadInfo:
         in_remotepath: bool = False,
         in_user_name: bool = False,
         in_md5: bool = False,
-    ) -> List[Dict[str, Any]]:
+    ) -> builtins.list[dict[str, Any]]:
         keyword = keyword.replace("'", r"\'")
 
         conditions = []
@@ -224,12 +222,12 @@ def save_rapid_upload_info(
     content_md5: str,
     content_crc32: int,  # not needed
     content_length: int,
-    localpath: Optional[str] = None,
-    remotepath: Optional[str] = None,
+    localpath: str | None = None,
+    remotepath: str | None = None,
     encrypt_password: bytes = b"",
     encrypt_type: str = "",
-    user_id: Optional[int] = None,
-    user_name: Optional[str] = None,
+    user_id: int | None = None,
+    user_name: str | None = None,
 ):
     rapiduploadinfo = RapidUploadInfo(rapiduploadinfo_file)
     rapiduploadinfo.insert(

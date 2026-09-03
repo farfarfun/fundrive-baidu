@@ -1,11 +1,11 @@
 # https://stackoverflow.com/a/22085679/2478637
 # http://simondlevy.academic.wlu.edu/files/software/kbhit.py
 
-from typing import Callable, Any
-
 import os
 import threading
 import time
+from collections.abc import Callable
+from typing import Any
 
 # Windows
 if os.name == "nt":
@@ -13,9 +13,9 @@ if os.name == "nt":
 
 # Posix (Linux, OS X)
 else:
+    import atexit
     import sys
     import termios
-    import atexit
     from select import select
 
 

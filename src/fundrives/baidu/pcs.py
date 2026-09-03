@@ -1,26 +1,28 @@
+from __future__ import annotations
+
 import json
 import random
 import re
 import time
 import urllib
 from base64 import standard_b64encode
+from collections.abc import Callable
 from enum import Enum
 from pathlib import Path
-from typing import IO, Any, Callable, Dict, List, Optional, Union
+from typing import IO, Any, Literal
 from urllib.error import HTTPError
 from urllib.parse import quote_plus, urlparse
 
 import requests  # type: ignore
 from requests_toolbelt import MultipartEncoder, MultipartEncoderMonitor
-from typing_extensions import Literal
 
 from .common.cache import timeout_cache
 from .common.crypto import calu_md5, calu_sha1
 from .common.date import now_timestamp
 from .common.io import MAX_CHUNK_SIZE, RangeRequestIO
-from .utils import dump_json
 from .errors import BaiduPCSError, assert_ok
 from .phone import get_phone_model, sum_IMEI
+from .utils import dump_json
 
 PCS_BAIDU_COM = "https://pcs.baidu.com"
 # PCS_BAIDU_COM = 'http://127.0.0.1:8888'
@@ -43,7 +45,7 @@ PAN_APP_ID = "250528"
 M3u8Type = Literal["M3U8_AUTO_720", "M3U8_AUTO_480"]
 
 
-def _from_to(f: str, t: str) -> Dict[str, str]:
+def _from_to(f: str, t: str) -> dict[str, str]:
     return {"from": f, "to": t}
 
 
@@ -85,11 +87,11 @@ class BaiduPCS:
 
     def __init__(
         self,
-        bduss: Optional[str] = None,
-        stoken: Optional[str] = None,
-        ptoken: Optional[str] = None,
-        cookies: Dict[str, Optional[str]] = {},
-        user_id: Optional[int] = None,
+        bduss: str | None = None,
+        stoken: str | None = None,
+        ptoken: str | None = None,
+        cookies: dict[str, str | None] = {},
+        user_id: int | None = None,
     ):
         if not bduss and cookies and cookies.get("BDUSS", ""):
             bduss = cookies["BDUSS"]
@@ -128,7 +130,7 @@ class BaiduPCS:
         self._user_info = user_info
 
     @property
-    def cookies(self) -> Dict[str, Optional[str]]:
+    def cookies(self) -> dict[str, str | None]:
         return self._session.cookies.get_dict()
 
     @staticmethod
@@ -166,17 +168,17 @@ class BaiduPCS:
         else:
             return dict(PAN_HEADERS)
 
-    def _cookies_update(self, cookies: Dict[str, str]):
+    def _cookies_update(self, cookies: dict[str, str]):
         self._session.cookies.update(cookies)
 
     def _request(
         self,
         method: Method,
         url: str,
-        params: Optional[Dict[str, str]] = {},
-        headers: Optional[Dict[str, str]] = None,
-        data: Union[str, bytes, Dict[str, str], Any] = None,
-        files: Optional[Dict[str, Any]] = None,
+        params: dict[str, str] | None = {},
+        headers: dict[str, str] | None = None,
+        data: str | bytes | dict[str, str] | Any = None,
+        files: dict[str, Any] | None = None,
         **kwargs,
     ) -> requests.Response:
         if params and isinstance(params, dict):
@@ -207,8 +209,8 @@ class BaiduPCS:
     def _request_get(
         self,
         url: str,
-        params: Optional[Dict[str, str]] = {},
-        headers: Optional[Dict[str, str]] = None,
+        params: dict[str, str] | None = {},
+        headers: dict[str, str] | None = None,
         **kwargs,
     ) -> requests.Response:
         return self._request(Method.Get, url, params=params, headers=headers)
@@ -324,8 +326,8 @@ class BaiduPCS:
         content_crc32: int,  # not needed
         io_len: int,
         remotepath: str,
-        local_ctime: Optional[int] = None,
-        local_mtime: Optional[int] = None,
+        local_ctime: int | None = None,
+        local_mtime: int | None = None,
         ondup="overwrite",
     ):
         """Rapid Upload File
@@ -392,10 +394,10 @@ class BaiduPCS:
     @assert_ok
     def combine_slices(
         self,
-        slice_md5s: List[str],
+        slice_md5s: list[str],
         remotepath: str,
-        local_ctime: Optional[int] = None,
-        local_mtime: Optional[int] = None,
+        local_ctime: int | None = None,
+        local_mtime: int | None = None,
         ondup="overwrite",
     ):
         url = PcsNode.File.url()
@@ -438,7 +440,7 @@ class BaiduPCS:
         resp = self._request(Method.Get, url, params=params)
         return resp.json()
 
-    def file_operate(self, operate: str, param: List[Dict[str, str]]):
+    def file_operate(self, operate: str, param: list[dict[str, str]]):
         url = PcsNode.File.url()
         params = {"method": operate}
         data = {"param": dump_json({"list": param})}
@@ -522,9 +524,7 @@ class BaiduPCS:
         return self.file_operate("delete", param)
 
     @assert_ok
-    def cloud_operate(
-        self, params: Dict[str, str], data: Optional[Dict[str, str]] = None
-    ):
+    def cloud_operate(self, params: dict[str, str], data: dict[str, str] | None = None):
         url = PanNode.Cloud.url()
         if data:
             resp = self._request(Method.Post, url, params=params, data=data)
@@ -576,11 +576,11 @@ class BaiduPCS:
         }
         return self.cloud_operate(params, data=data)
 
-    def add_magnet_task(self, task_url: str, remotedir: str, selected_idx: List[int]):
+    def add_magnet_task(self, task_url: str, remotedir: str, selected_idx: list[int]):
         """Add cloud task for magnet
 
         Args:
-            selected_idx (List[int]): indexes of `BaiduPCS.magnet_info` list,
+            selected_idx (list[int]): indexes of `BaiduPCS.magnet_info` list,
                 starting from 1
 
         Warning: `STOKEN` must be in `cookies`
@@ -827,7 +827,7 @@ class BaiduPCS:
     def transfer_shared_paths(
         self,
         remotedir: str,
-        fs_ids: List[int],
+        fs_ids: list[int],
         uk: int,
         share_id: int,
         bdstoken: str,
@@ -937,7 +937,7 @@ class BaiduPCS:
         return resp.json()
 
     @timeout_cache(1 * 60 * 60)  # 1 hour timeout
-    def download_link(self, remotepath: str, pcs: bool = False) -> Optional[str]:
+    def download_link(self, remotepath: str, pcs: bool = False) -> str | None:
         if pcs:
             return (
                 "http://c.pcs.baidu.com/rest/2.0/pcs/file"
@@ -1016,7 +1016,7 @@ class BaiduPCS:
         callback: Callable[..., None] = None,
         encrypt_password: bytes = b"",
         pcs: bool = False,
-    ) -> Optional[RangeRequestIO]:
+    ) -> RangeRequestIO | None:
         url = self.download_link(remotepath, pcs=pcs)
         if not url:
             return None

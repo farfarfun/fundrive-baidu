@@ -34,7 +34,7 @@ class _NetworkGuard:
 
 def test_import_top_level_namespace():
     """共享导入命名空间 `fundrives`（NAMING.md 中记录的插件式布局）应可正常导入。"""
-    import fundrives  # noqa: F401
+    import fundrives
     import fundrives.baidu  # noqa: F401
 
 
@@ -44,9 +44,9 @@ def test_import_public_api_symbols():
         BaiduPCS,
         BaiduPCSApi,
         BaiduPCSError,
+        PcsAuth,
         PcsFile,
         PcsQuota,
-        PcsAuth,
         PcsUser,
     )
 
@@ -119,7 +119,9 @@ def test_baidupcs_login_with_real_credentials_is_skipped():
     在 CI / 冒烟测试环境中不具备，也不应该在测试里硬编码真实凭据。
     这里显式跳过，避免伪造一个“通过”的假象。
     """
-    pytest.skip("需要真实凭据，跳过：BaiduPCS 对真实百度网盘账号的登录/鉴权无法在无凭据环境下验证")
+    pytest.skip(
+        "需要真实凭据，跳过：BaiduPCS 对真实百度网盘账号的登录/鉴权无法在无凭据环境下验证"
+    )
 
 
 def test_no_cli_entry_point_declared():

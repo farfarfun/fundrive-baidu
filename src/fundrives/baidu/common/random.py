@@ -1,5 +1,5 @@
-import random
 import os
+import random
 import struct
 from functools import partial
 

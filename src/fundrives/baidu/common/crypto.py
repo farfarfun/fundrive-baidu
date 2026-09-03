@@ -5,7 +5,7 @@ import re
 import subprocess
 from abc import ABC, abstractmethod
 from hashlib import md5, sha1
-from typing import IO, Any, List, Tuple, Union
+from typing import IO, Any
 from zlib import crc32
 
 from cryptography.hazmat.backends import default_backend
@@ -17,7 +17,7 @@ from .platform import IS_LINUX, IS_MACOS
 from .simple_cipher import SimpleCryptography as _SimpleCryptography
 
 
-def _md5_cmd(localpath: str) -> List[str]:
+def _md5_cmd(localpath: str) -> list[str]:
     if IS_MACOS:
         cmd = ["md5", localpath]
     elif IS_LINUX:
@@ -28,9 +28,7 @@ def _md5_cmd(localpath: str) -> List[str]:
 
 
 def calu_file_md5(localpath: str) -> str:
-    cp = subprocess.run(
-        _md5_cmd(localpath), universal_newlines=True, stdout=subprocess.PIPE
-    )
+    cp = subprocess.run(_md5_cmd(localpath), text=True, stdout=subprocess.PIPE)
 
     output = cp.stdout.strip()
     if IS_MACOS:
@@ -43,7 +41,7 @@ def calu_file_md5(localpath: str) -> str:
         return cn
 
 
-def calu_md5(buf: Union[str, bytes], encoding="utf-8") -> str:
+def calu_md5(buf: str | bytes, encoding="utf-8") -> str:
     assert isinstance(buf, (str, bytes))
 
     if isinstance(buf, str):
@@ -51,7 +49,7 @@ def calu_md5(buf: Union[str, bytes], encoding="utf-8") -> str:
     return md5(buf).hexdigest()
 
 
-def calu_crc32_and_md5(stream: IO, chunk_size: int) -> Tuple[int, str]:
+def calu_crc32_and_md5(stream: IO, chunk_size: int) -> tuple[int, str]:
     md5_v = md5()
     crc32_v = 0
     while True:
@@ -64,7 +62,7 @@ def calu_crc32_and_md5(stream: IO, chunk_size: int) -> Tuple[int, str]:
     return crc32_v.conjugate() & 0xFFFFFFFF, md5_v.hexdigest()
 
 
-def calu_sha1(buf: Union[str, bytes], encoding="utf-8") -> str:
+def calu_sha1(buf: str | bytes, encoding="utf-8") -> str:
     assert isinstance(buf, (str, bytes))
 
     if isinstance(buf, str):
@@ -88,9 +86,7 @@ def random_sys_bytes(size: int) -> bytes:
     return os.urandom(size)
 
 
-def padding_key(
-    key: Union[str, bytes], length: int = 0, value: bytes = b"\xff"
-) -> bytes:
+def padding_key(key: str | bytes, length: int = 0, value: bytes = b"\xff") -> bytes:
     """padding key with `value`"""
 
     assert len(value) < 2
@@ -151,7 +147,7 @@ def generate_salt(size: int = 8) -> bytes:
 # {{{
 def generate_key_iv(
     password: bytes, salt: bytes, key_size: int, iv_size: int, algo: str = "md5"
-) -> Tuple[bytes, bytes]:
+) -> tuple[bytes, bytes]:
     def hasher(algo: str, data: bytes) -> bytes:
         hashes = {
             "md5": hashlib.md5,

@@ -1,14 +1,15 @@
-from typing import Optional, List, Any, Callable
+from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from os import PathLike
 from pathlib import Path
 from threading import Semaphore
-from concurrent.futures import ThreadPoolExecutor, as_completed, Future
-
-from .constant import CPU_NUM
-from .io import RangeRequestIO
-from .concurrent import sure_release, retry
+from typing import Any
 
 from rich.progress import TaskID
+
+from .concurrent import retry, sure_release
+from .constant import CPU_NUM
+from .io import RangeRequestIO
 
 DEFAULT_MAX_WORKERS = 5
 
@@ -16,7 +17,7 @@ DEFAULT_MAX_WORKERS = 5
 class MeDownloader(RangeRequestIO):
     _executor: ThreadPoolExecutor
     _semaphore: Semaphore
-    _futures: List[Future]
+    _futures: list[Future]
 
     @classmethod
     def _set_executor(
@@ -42,10 +43,10 @@ class MeDownloader(RangeRequestIO):
     def download(
         self,
         localpath: PathLike,
-        task_id: Optional[TaskID],
+        task_id: TaskID | None,
         continue_: bool = False,
-        done_callback: Optional[Callable[[Future], Any]] = None,
-        except_callback: Optional[Callable[..., Any]] = None,
+        done_callback: Callable[[Future], Any] | None = None,
+        except_callback: Callable[..., Any] | None = None,
     ):
         """
         Download the url content to `localpath`

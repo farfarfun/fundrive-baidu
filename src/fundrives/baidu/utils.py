@@ -34,8 +34,7 @@ def human_size(size: int) -> str:
             v = f"{s:3.1f}"
             break
         s /= 1024.0
-    if v.endswith(".0"):
-        v = v[:-2]
+    v = v.removesuffix(".0")
     return f"{v} {t}"
 
 

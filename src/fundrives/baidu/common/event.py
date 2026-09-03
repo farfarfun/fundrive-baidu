@@ -1,5 +1,6 @@
-from typing import List, Callable, Any
 import sys
+from collections.abc import Callable
+from typing import Any
 
 from .keyboard import KeyboardListener
 
@@ -15,7 +16,7 @@ class KeyHandler:
 
 
 class KeyboardMonitor:
-    KEY_HANDLERS: List[KeyHandler] = []
+    KEY_HANDLERS: list[KeyHandler] = []
 
     @classmethod
     def register(cls, key_handler: KeyHandler):

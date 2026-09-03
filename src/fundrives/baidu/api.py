@@ -1,10 +1,14 @@
+from __future__ import annotations
+
 import os
+import re
 from collections import deque
+from collections.abc import Callable
 from io import BytesIO
 from pathlib import Path, PurePosixPath
-from typing import IO, Callable, Dict, List, Optional, Set, Tuple
-import re
-from funutil import getLogger
+from typing import IO
+
+from farlog import getLogger
 from PIL import Image
 from requests_toolbelt import MultipartEncoderMonitor
 from rich.prompt import Prompt
@@ -33,7 +37,12 @@ SHARED_URL_PREFIX = "https://pan.baidu.com/s/"
 
 
 def _unify_shared_url(url: str) -> str:
-    """Unify input shared url"""
+    """统一分享链接格式。
+
+    :param url: 原始分享链接（标准链接或旧版 surl 链接）
+    :return: 统一为 ``https://pan.baidu.com/s/<id>`` 格式的分享链接
+    :raises ValueError: 传入的链接不是合法的百度网盘分享链接
+    """
 
     # For Standard url
     temp = r"pan\.baidu\.com/s/(.+?)(\?|$)"
@@ -51,80 +60,115 @@ def _unify_shared_url(url: str) -> str:
 
 
 class BaiduPCSApi:
-    """Baidu PCS Api
+    """百度网盘 PCS 接口封装。
 
-    This is the wrapper of `BaiduPCS`. It parses the content of response of raw
-    BaiduPCS requests to some inner data structions.
+    是 `BaiduPCS` 的上层包装，将原始 PCS 请求的响应内容解析为更易用的
+    内部数据结构（`PcsFile`、`PcsSharedLink` 等）。
     """
 
     def __init__(
         self,
-        bduss: Optional[str] = None,
-        stoken: Optional[str] = None,
-        ptoken: Optional[str] = None,
-        cookies: Dict[str, Optional[str]] = {},
-        user_id: Optional[int] = None,
+        bduss: str | None = None,
+        stoken: str | None = None,
+        ptoken: str | None = None,
+        cookies: dict[str, str | None] = {},
+        user_id: int | None = None,
     ):
+        """初始化百度网盘 API 客户端。
+
+        :param bduss: 百度账号登录凭据 BDUSS
+        :param stoken: 分享相关接口所需的 STOKEN
+        :param ptoken: 部分接口所需的 PTOKEN
+        :param cookies: 附加 cookies
+        :param user_id: 百度用户 id
+        """
         self._baidupcs = BaiduPCS(
             bduss, stoken=stoken, ptoken=ptoken, cookies=cookies, user_id=user_id
         )
 
     @property
     def bduss(self) -> str:
+        """当前使用的 BDUSS。"""
         return self._baidupcs._bduss
 
     @property
     def bdstoken(self) -> str:
+        """当前使用的 BDSTOKEN。"""
         return self._baidupcs.bdstoken
 
     @property
-    def stoken(self) -> Optional[str]:
+    def stoken(self) -> str | None:
+        """当前使用的 STOKEN。"""
         return self._baidupcs._stoken
 
     @property
-    def ptoken(self) -> Optional[str]:
+    def ptoken(self) -> str | None:
+        """当前使用的 PTOKEN。"""
         return self._baidupcs._ptoken
 
     @property
-    def baiduid(self) -> Optional[str]:
+    def baiduid(self) -> str | None:
+        """当前使用的 BAIDUID。"""
         return self._baidupcs._baiduid
 
     @property
-    def logid(self) -> Optional[str]:
+    def logid(self) -> str | None:
+        """当前使用的 LOGID。"""
         return self._baidupcs._logid
 
     @property
-    def user_id(self) -> Optional[int]:
+    def user_id(self) -> int | None:
+        """当前用户 id。"""
         return self._baidupcs._user_id
 
     @property
-    def cookies(self) -> Dict[str, Optional[str]]:
+    def cookies(self) -> dict[str, str | None]:
+        """当前会话使用的完整 cookies。"""
         return self._baidupcs.cookies
 
     def quota(self) -> PcsQuota:
-        """Quota Information"""
+        """获取网盘空间配额信息。
+
+        :return: 包含总空间、已用空间的 `PcsQuota`
+        """
 
         info = self._baidupcs.quota()
         return PcsQuota(quota=info["quota"], used=info["used"])
 
-    def meta(self, *remotepaths: str) -> List[PcsFile]:
-        """Meta data of `remotepaths`"""
+    def meta(self, *remotepaths: str) -> list[PcsFile]:
+        """获取 `remotepaths` 的元数据。
+
+        :param remotepaths: 一个或多个网盘绝对路径
+        :return: 对应的 `PcsFile` 列表
+        """
 
         info = self._baidupcs.meta(*remotepaths)
         return [PcsFile.from_(v) for v in info.get("list", [])]
 
     def exists(self, remotepath: str) -> bool:
-        """Check whether `remotepath` exists"""
+        """检查 `remotepath` 是否存在。
+
+        :param remotepath: 网盘绝对路径
+        :return: 是否存在
+        """
 
         return self._baidupcs.exists(remotepath)
 
     def is_file(self, remotepath: str) -> bool:
-        """Check whether `remotepath` is a file"""
+        """检查 `remotepath` 是否为文件。
+
+        :param remotepath: 网盘绝对路径
+        :return: 是否为文件
+        """
 
         return self._baidupcs.is_file(remotepath)
 
     def is_dir(self, remotepath: str) -> bool:
-        """Check whether `remotepath` is a directory"""
+        """检查 `remotepath` 是否为目录。
+
+        :param remotepath: 网盘绝对路径
+        :return: 是否为目录
+        """
 
         return self._baidupcs.is_dir(remotepath)
 
@@ -136,8 +180,17 @@ class BaiduPCSApi:
         time: bool = False,
         size: bool = False,
         recursive: bool = False,
-    ) -> List[PcsFile]:
-        """List directory contents"""
+    ) -> list[PcsFile]:
+        """列出目录内容。
+
+        :param remotepath: 网盘目录绝对路径
+        :param desc: 是否倒序排列
+        :param name: 是否按名称排序
+        :param time: 是否按时间排序
+        :param size: 是否按大小排序
+        :param recursive: 是否递归列出子目录内容
+        :return: `PcsFile` 列表
+        """
 
         info = self._baidupcs.list(
             remotepath, desc=desc, name=name, time=time, size=size
@@ -159,12 +212,15 @@ class BaiduPCSApi:
         ondup="overwrite",
         callback: Callable[[MultipartEncoderMonitor], None] = None,
     ) -> PcsFile:
-        """Upload an io to `remotepath`
+        """上传一个 IO 对象到 `remotepath`。
 
-        ondup (str): "overwrite" or "newcopy"
-        callable: the callback for monitoring uploading progress
+        :param io: 待上传内容的可读 IO 对象
+        :param remotepath: 网盘绝对路径
+        :param ondup: 同名处理策略，``overwrite`` 覆盖或 ``newcopy`` 新建副本
+        :param callback: 上传进度回调
+        :return: 上传成功后的 `PcsFile`
 
-        Warning, the api CAN NOT set local_ctime and local_mtime
+        注意：该接口无法设置 local_ctime 和 local_mtime。
         """
 
         info = self._baidupcs.upload_file(
@@ -179,21 +235,21 @@ class BaiduPCSApi:
         content_crc32: int,  # not needed
         io_len: int,
         remotepath: str,
-        local_ctime: Optional[int] = None,
-        local_mtime: Optional[int] = None,
+        local_ctime: int | None = None,
+        local_mtime: int | None = None,
         ondup="overwrite",
     ) -> PcsFile:
-        """Rapid Upload File
+        """秒传文件。
 
-        slice_md5 (32 bytes): the md5 of pre 256KB of content.
-        content_md5 (32 bytes): the md5 of total content.
-        content_crc32 (int): the crc32 of total content (Not Needed),
-            if content_crc32 is 0, the params of the api will be ignored.
-        io_len (int): the length of total content.
-        remotepath (str): the absolute remote path to save the content.
-        local_ctime (optional, int): the timestramp of the local ctime
-        local_mtime (optional, int): the timestramp of the local mtime
-        ondup (str): "overwrite" or "newcopy"
+        :param slice_md5: 内容前 256KB 的 md5（32 字节）
+        :param content_md5: 完整内容的 md5（32 字节）
+        :param content_crc32: 完整内容的 crc32（非必需，若为 0 则该参数会被忽略）
+        :param io_len: 完整内容的长度
+        :param remotepath: 保存内容的网盘绝对路径
+        :param local_ctime: 本地创建时间戳（可选）
+        :param local_mtime: 本地修改时间戳（可选）
+        :param ondup: 同名处理策略，``overwrite`` 覆盖或 ``newcopy`` 新建副本
+        :return: 上传成功后的 `PcsFile`
         """
 
         info = self._baidupcs.rapid_upload_file(
@@ -211,9 +267,11 @@ class BaiduPCSApi:
     def upload_slice(
         self, io: IO, callback: Callable[[MultipartEncoderMonitor], None] = None
     ) -> str:
-        """Upload an io as a slice
+        """上传一个 IO 对象作为分片。
 
-        callable: the callback for monitoring uploading progress
+        :param io: 待上传分片内容
+        :param callback: 上传进度回调
+        :return: 分片的 md5
         """
 
         info = self._baidupcs.upload_slice(io, callback=callback)
@@ -221,17 +279,20 @@ class BaiduPCSApi:
 
     def combine_slices(
         self,
-        slice_md5s: List[str],
+        slice_md5s: list[str],
         remotepath: str,
-        local_ctime: Optional[int] = None,
-        local_mtime: Optional[int] = None,
+        local_ctime: int | None = None,
+        local_mtime: int | None = None,
         ondup="overwrite",
     ) -> PcsFile:
-        """Combine uploaded slices to `remotepath`
+        """合并已上传的分片到 `remotepath`。
 
-        local_ctime (optional, int): the timestramp of the local ctime
-        local_mtime (optional, int): the timestramp of the local mtime
-        ondup (str): "overwrite" or "newcopy"
+        :param slice_md5s: 各分片的 md5 列表
+        :param remotepath: 保存内容的网盘绝对路径
+        :param local_ctime: 本地创建时间戳（可选）
+        :param local_mtime: 本地修改时间戳（可选）
+        :param ondup: 同名处理策略，``overwrite`` 覆盖或 ``newcopy`` 新建副本
+        :return: 合并成功后的 `PcsFile`
         """
 
         info = self._baidupcs.combine_slices(
@@ -245,8 +306,14 @@ class BaiduPCSApi:
 
     def search(
         self, keyword: str, remotepath: str, recursive: bool = False
-    ) -> List[PcsFile]:
-        """Search in `remotepath` with `keyword`"""
+    ) -> list[PcsFile]:
+        """在 `remotepath` 下按 `keyword` 搜索文件。
+
+        :param keyword: 搜索关键字
+        :param remotepath: 搜索起始目录
+        :param recursive: 是否递归搜索子目录
+        :return: 匹配的 `PcsFile` 列表
+        """
 
         info = self._baidupcs.search(keyword, remotepath, recursive=recursive)
         pcs_files = []
@@ -255,11 +322,21 @@ class BaiduPCSApi:
         return pcs_files
 
     def makedir(self, directory: str) -> PcsFile:
+        """创建目录。
+
+        :param directory: 待创建的网盘绝对路径
+        :return: 创建成功后的 `PcsFile`
+        """
         info = self._baidupcs.makedir(directory)
         return PcsFile.from_(info)
 
-    def move(self, *remotepaths: str) -> List[FromTo]:
-        """Move `remotepaths[:-1]` to `remotepaths[-1]`"""
+    def move(self, *remotepaths: str) -> list[FromTo]:
+        """将 `remotepaths[:-1]` 移动到 `remotepaths[-1]`。
+
+        :param remotepaths: 一组网盘绝对路径，最后一个为目标目录
+        :return: 每个源路径到目标路径的映射列表
+        :raises BaiduPCSError: 移动操作失败
+        """
 
         info = self._baidupcs.move(*remotepaths)
         r = info["extra"].get("list")
@@ -268,6 +345,13 @@ class BaiduPCSApi:
         return [FromTo(from_=v["from"], to_=v["to"]) for v in r]
 
     def rename(self, source: str, dest: str) -> FromTo:
+        """重命名 `source` 为 `dest`。
+
+        :param source: 原始网盘绝对路径
+        :param dest: 新的网盘绝对路径
+        :return: 源路径到新路径的映射
+        :raises BaiduPCSError: 重命名操作失败
+        """
         info = self._baidupcs.rename(source, dest)
         r = info["extra"].get("list")
         if not r:
@@ -275,8 +359,13 @@ class BaiduPCSApi:
         v = r[0]
         return FromTo(from_=v["from"], to_=v["to"])
 
-    def copy(self, *remotepaths: str):
-        """Copy `remotepaths[:-1]` to `remotepaths[-1]`"""
+    def copy(self, *remotepaths: str) -> list[FromTo]:
+        """将 `remotepaths[:-1]` 复制到 `remotepaths[-1]`。
+
+        :param remotepaths: 一组网盘绝对路径，最后一个为目标目录
+        :return: 每个源路径到目标路径的映射列表
+        :raises BaiduPCSError: 复制操作失败
+        """
 
         info = self._baidupcs.copy(*remotepaths)
         r = info["extra"].get("list")
@@ -284,45 +373,63 @@ class BaiduPCSApi:
             raise BaiduPCSError("File operator [copy] fails")
         return [FromTo(from_=v["from"], to_=v["to"]) for v in r]
 
-    def remove(self, *remotepaths: str):
-        """Remove all `remotepaths`"""
+    def remove(self, *remotepaths: str) -> None:
+        """删除所有 `remotepaths`。
+
+        :param remotepaths: 待删除的网盘绝对路径
+        """
 
         self._baidupcs.remove(*remotepaths)
 
-    def magnet_info(self, magnet: str) -> List[PcsMagnetFile]:
-        """Get the magnet information"""
+    def magnet_info(self, magnet: str) -> list[PcsMagnetFile]:
+        """获取磁力链接的信息。
+
+        :param magnet: 磁力链接
+        :return: 磁力链接内包含的文件列表
+        """
 
         info = self._baidupcs.magnet_info(magnet)
         return [PcsMagnetFile.from_(v) for v in info["magnet_info"]]
 
-    def torrent_info(self, remote_torrent: str):
-        """Get the `remote_torrent` information"""
+    def torrent_info(self, remote_torrent: str) -> None:
+        """获取 `remote_torrent` 种子文件的信息。
+
+        :param remote_torrent: 网盘内种子文件路径
+        """
 
         self._baidupcs.torrent_info(remote_torrent)
 
     def add_task(self, task_url: str, remotedir: str) -> str:
-        """Add a cloud task to save at `remotedir`
+        """添加一个离线下载任务，保存到 `remotedir`。
 
-        task_url (str): http url
+        :param task_url: 待下载资源的 http 链接
+        :param remotedir: 保存目录
+        :return: 任务 id
         """
 
         info = self._baidupcs.add_task(task_url, remotedir)
         return str(info["task_id"])
 
     def add_magnet_task(
-        self, task_url: str, remotedir: str, selected_idx: List[int]
+        self, task_url: str, remotedir: str, selected_idx: list[int]
     ) -> str:
-        """Add a magnet task to save at `remotedir`.
+        """添加一个磁力链接离线下载任务，保存到 `remotedir`。
 
-        task_url (str): magnet link
-        selected_idx: the indexes needed to download
+        :param task_url: 磁力链接
+        :param remotedir: 保存目录
+        :param selected_idx: 需要下载的文件索引
+        :return: 任务 id
         """
 
         info = self._baidupcs.add_magnet_task(task_url, remotedir, selected_idx)
         return str(info["task_id"])
 
-    def tasks(self, *task_ids: str) -> List[CloudTask]:
-        """List cloud tasks with their `task_ids`"""
+    def tasks(self, *task_ids: str) -> list[CloudTask]:
+        """按 `task_ids` 列出离线下载任务。
+
+        :param task_ids: 任务 id 列表
+        :return: 对应的 `CloudTask` 列表
+        """
 
         info = self._baidupcs.tasks(*task_ids)
         tasks = []
@@ -331,29 +438,41 @@ class BaiduPCSApi:
             tasks.append(CloudTask.from_(v))
         return tasks
 
-    def list_tasks(self) -> List[CloudTask]:
-        """List all cloud tasks"""
+    def list_tasks(self) -> list[CloudTask]:
+        """列出所有离线下载任务。
+
+        :return: `CloudTask` 列表
+        """
 
         info = self._baidupcs.list_tasks()
         return [CloudTask.from_(v) for v in info["task_info"]]
 
     def clear_tasks(self) -> int:
-        """Clear all finished and failed cloud tasks"""
+        """清空所有已完成和失败的离线下载任务。
+
+        :return: 被清除的任务数量
+        """
 
         info = self._baidupcs.clear_tasks()
         return info["total"]
 
-    def cancel_task(self, task_id: str):
-        """Cancel a cloud task with its `task_id`"""
+    def cancel_task(self, task_id: str) -> None:
+        """取消指定 `task_id` 的离线下载任务。
+
+        :param task_id: 任务 id
+        """
 
         self._baidupcs.cancel_task(task_id)
 
     def share(self, *remotepaths: str, password: str, period: int = 0) -> PcsSharedLink:
-        """Share `remotepaths` to public with a optional password
+        """创建 `remotepaths` 的公开分享链接（可设置提取码）。
 
-        To use api, `STOKEN` must be in `cookies`
+        调用该接口 cookies 中必须包含 `STOKEN`。
 
-        period (int): The days for expiring. `0` means no expiring
+        :param remotepaths: 待分享的网盘绝对路径
+        :param password: 分享提取码
+        :param period: 过期天数，``0`` 表示永不过期
+        :return: 分享链接信息
         """
 
         info = self._baidupcs.share(*remotepaths, password=password, period=period)
@@ -362,19 +481,25 @@ class BaiduPCSApi:
         )
         return link
 
-    def list_shared(self, page: int = 1) -> List[PcsSharedLink]:
-        """List shared link on a page
+    def list_shared(self, page: int = 1) -> list[PcsSharedLink]:
+        """分页列出当前用户的分享链接。
 
-        To use api, `STOKEN` must be in `cookies`
+        调用该接口 cookies 中必须包含 `STOKEN`。
+
+        :param page: 页码，从 1 开始
+        :return: 分享链接列表
         """
 
         info = self._baidupcs.list_shared(page)
         return [PcsSharedLink.from_(v) for v in info["list"]]
 
-    def shared_password(self, share_id: int) -> Optional[str]:
-        """Show shared link password
+    def shared_password(self, share_id: int) -> str | None:
+        """查看分享链接的提取码。
 
-        To use api, `STOKEN` must be in `cookies`
+        调用该接口 cookies 中必须包含 `STOKEN`。
+
+        :param share_id: 分享 id
+        :return: 提取码，若分享未设置提取码或已过期则返回 ``None``
         """
 
         info = self._baidupcs.shared_password(share_id)
@@ -383,10 +508,12 @@ class BaiduPCSApi:
             return None
         return p
 
-    def cancel_shared(self, *share_ids: int):
-        """Cancel shared links with their `share_ids`
+    def cancel_shared(self, *share_ids: int) -> None:
+        """按 `share_ids` 取消分享链接。
 
-        To use api, `STOKEN` must be in `cookies`
+        调用该接口 cookies 中必须包含 `STOKEN`。
+
+        :param share_ids: 分享 id 列表
         """
 
         self._baidupcs.cancel_shared(*share_ids)
@@ -398,13 +525,18 @@ class BaiduPCSApi:
         vcode_str: str = "",
         vcode: str = "",
         show_vcode: bool = True,
-    ):
-        """Verify the `shared_url` which needs the `password`
+    ) -> None:
+        """校验需要提取码的分享链接 `shared_url`。
 
-        This method MUST be called before calling `self.shared_paths`.
+        调用 `self.shared_paths` 之前必须先调用本方法。
 
-        show_vcode (bool): If set True, it will be open the vcode image (if needed)
-            with a gui window. Else, you need to handle the vcode.
+        :param shared_url: 分享链接
+        :param password: 分享提取码
+        :param vcode_str: 验证码校验字符串，触发验证码时使用
+        :param vcode: 验证码内容，触发验证码时使用
+        :param show_vcode: 为 ``True`` 时在需要验证码时打开图形界面窗口显示；
+            为 ``False`` 时需要调用方自行处理验证码
+        :raises BaiduPCSError: 校验失败且非验证码相关错误
         """
 
         while True:
@@ -429,20 +561,33 @@ class BaiduPCSApi:
                 else:
                     raise err
 
-    def getcaptcha(self, shared_url: str) -> Tuple[str, str]:
-        """Get one vcode information
-        Return `vcode_str`, `vcode_img_url`"""
+    def getcaptcha(self, shared_url: str) -> tuple[str, str]:
+        """获取一个验证码信息。
+
+        :param shared_url: 分享链接
+        :return: ``(vcode_str, vcode_img_url)``
+        """
 
         info = self._baidupcs.getcaptcha(shared_url)
         return info["vcode_str"], info["vcode_img"]
 
     def get_vcode_img(self, vcode_img_url: str, shared_url: str) -> bytes:
-        """Get vcode image content"""
+        """获取验证码图片内容。
+
+        :param vcode_img_url: 验证码图片地址
+        :param shared_url: 分享链接
+        :return: 图片二进制内容
+        """
 
         return self._baidupcs.get_vcode_img(vcode_img_url, shared_url)
 
-    def shared_paths(self, shared_url: str) -> List[PcsSharedPath]:
-        """Shared paths of the `shared_url`"""
+    def shared_paths(self, shared_url: str) -> list[PcsSharedPath]:
+        """获取 `shared_url` 分享的路径列表。
+
+        :param shared_url: 分享链接
+        :return: `PcsSharedPath` 列表
+        :raises ValueError: 分享信息解析失败
+        """
 
         info = self._baidupcs.shared_paths(shared_url)
         uk = info.get("share_uk") or info.get("uk")
@@ -476,8 +621,17 @@ class BaiduPCSApi:
         bdstoken: str,
         page: int = 1,
         size: int = 100,
-    ) -> List[PcsSharedPath]:
-        """Sub shared paths of the shared directory `sharedpath`"""
+    ) -> list[PcsSharedPath]:
+        """列出分享目录 `sharedpath` 下的子路径。
+
+        :param sharedpath: 分享目录路径
+        :param uk: 分享者 uk
+        :param share_id: 分享 id
+        :param bdstoken: bdstoken
+        :param page: 页码，从 1 开始
+        :param size: 单页数量
+        :return: `PcsSharedPath` 列表
+        """
 
         info = self._baidupcs.list_shared_paths(
             sharedpath, uk, share_id, page=page, size=size
@@ -490,20 +644,31 @@ class BaiduPCSApi:
     def transfer_shared_paths(
         self,
         remotedir: str,
-        fs_ids: List[int],
+        fs_ids: list[int],
         uk: int,
         share_id: int,
         bdstoken: str,
         shared_url: str,
-    ):
-        """Save these `fs_ids` of shared paths to `remotedir`"""
+    ) -> None:
+        """将分享路径的 `fs_ids` 转存到 `remotedir`。
+
+        :param remotedir: 目标保存目录
+        :param fs_ids: 待转存文件的 fs_id 列表
+        :param uk: 分享者 uk
+        :param share_id: 分享 id
+        :param bdstoken: bdstoken
+        :param shared_url: 分享链接
+        """
 
         self._baidupcs.transfer_shared_paths(
             remotedir, fs_ids, uk, share_id, bdstoken, shared_url
         )
 
     def user_info(self) -> PcsUser:
-        """User's information"""
+        """获取当前用户信息。
+
+        :return: 包含账号、鉴权、配额、会员等信息的 `PcsUser`
+        """
 
         info = self._baidupcs.user_info()
         user_id = int(info["user"]["id"])
@@ -541,8 +706,11 @@ class BaiduPCSApi:
             level=level,
         )
 
-    def user_products(self) -> Tuple[List[PcsUserProduct], int]:
-        """User's product information"""
+    def user_products(self) -> tuple[list[PcsUserProduct], int]:
+        """获取当前用户的会员产品信息。
+
+        :return: ``(会员产品列表, 当前等级)``
+        """
 
         info = self._baidupcs.user_products()
         pds = []
@@ -562,14 +730,13 @@ class BaiduPCSApi:
         level = info["level_info"]["current_level"]
         return pds, level
 
-    def download_link(self, remotepath: str, pcs: bool = False) -> Optional[str]:
-        """
-        Download link of the `remotepath`
+    def download_link(self, remotepath: str, pcs: bool = False) -> str | None:
+        """获取 `remotepath` 的下载链接。
 
-        pcs (bool, default: False): If pcs is True, return the downloading pcs link
-            which has a limited threshold of downstream even if the user is a svip.
-            If pcs is False, return the downloading link requested by the android api
-            and which has not limited threshold for a svip user.
+        :param remotepath: 网盘绝对路径
+        :param pcs: 为 ``True`` 时返回 PCS 下载链接（限速，即使是超级会员也有下行阈值限制）；
+            为 ``False`` 时返回 android api 请求的下载链接（超级会员无限速）
+        :return: 下载链接，获取失败时为 ``None``
         """
 
         return self._baidupcs.download_link(remotepath, pcs=pcs)
@@ -581,8 +748,16 @@ class BaiduPCSApi:
         callback: Callable[..., None] = None,
         encrypt_password: bytes = b"",
         pcs: bool = False,
-    ) -> Optional[RangeRequestIO]:
-        """File stream as a normal io"""
+    ) -> RangeRequestIO | None:
+        """将 `remotepath` 作为普通 IO 流打开。
+
+        :param remotepath: 网盘绝对路径
+        :param max_chunk_size: 单次请求的最大分片大小
+        :param callback: 读取进度回调
+        :param encrypt_password: 解密密码（内容为加密文件时使用）
+        :param pcs: 是否使用 PCS 下载链接
+        :return: 可读的 `RangeRequestIO`，失败时为 ``None``
+        """
 
         return self._baidupcs.file_stream(
             remotepath,
@@ -593,7 +768,12 @@ class BaiduPCSApi:
         )
 
     def m3u8_stream(self, remotepath: str, type: M3u8Type = "M3U8_AUTO_720") -> str:
-        """Media file's m3u8 content"""
+        """获取媒体文件的 m3u8 内容。
+
+        :param remotepath: 网盘绝对路径
+        :param type: 清晰度类型
+        :return: m3u8 文本内容，获取失败时为空字符串
+        """
 
         info = self._baidupcs.m3u8_stream(remotepath, type)
         if info.get("m3u8_content"):
@@ -604,12 +784,13 @@ class BaiduPCSApi:
 
     def rapid_upload_info(
         self, remotepath: str, check: bool = True
-    ) -> Optional[PcsRapidUploadInfo]:
-        """Rapid upload information
+    ) -> PcsRapidUploadInfo | None:
+        """获取秒传信息。
 
-        check (bool): If check is True, we need to use the `self.rapid_upload_file` to
-            check whether the rapid upload information is valid. Therefore some meta information
-            of the `remotepath` will be changed. These are server_ctime and server_mtime.
+        :param remotepath: 网盘绝对路径
+        :param check: 为 ``True`` 时会调用 `self.rapid_upload_file` 校验秒传信息
+            是否有效（会改变 `remotepath` 的 server_ctime、server_mtime 等元信息）
+        :return: 秒传信息，不满足秒传条件时为 ``None``
         """
 
         pcs_file = self.meta(remotepath)[0]
@@ -675,8 +856,14 @@ class BaiduPCSApi:
         )
 
     def save_shared(
-        self, shared_url: str, remote_dir: str, password: Optional[str] = None
-    ):
+        self, shared_url: str, remote_dir: str, password: str | None = None
+    ) -> None:
+        """将分享链接 `shared_url` 中的内容转存到 `remote_dir`。
+
+        :param shared_url: 分享链接
+        :param remote_dir: 转存到的网盘目录
+        :param password: 分享提取码，链接需要提取码时必须传入
+        """
         shared_url = _unify_shared_url(shared_url)
 
         if password:
@@ -686,10 +873,10 @@ class BaiduPCSApi:
             )
 
         shared_paths = deque(self.shared_paths(shared_url))
-        _remote_dirs: Dict[PcsSharedPath, str] = dict(
+        _remote_dirs: dict[PcsSharedPath, str] = dict(
             [(sp, remote_dir) for sp in shared_paths]
         )
-        _dir_exists: Set[str] = set()
+        _dir_exists: set[str] = set()
 
         while shared_paths:
             shared_path = shared_paths.popleft()
@@ -734,9 +921,7 @@ class BaiduPCSApi:
                     logger.error(
                         f"error_code:{err.error_code} share transfer pcs error"
                     )
-                elif err.error_code == 130:
-                    logger.error(f"error_code:{err.error_code} 转存文件数超限")
-                elif err.error_code == 120:
+                elif err.error_code == 130 or err.error_code == 120:
                     logger.error(f"error_code:{err.error_code} 转存文件数超限")
                 else:
                     logger.error(f"error_code:{err.error_code}:{err}")
@@ -752,8 +937,15 @@ class BaiduPCSApi:
                 shared_paths.extendleft(sub_paths[::-1])
 
     def remote_path_exists(
-        self, name: str, rd: str, _cache: Dict[str, Set[str]] = {}
+        self, name: str, rd: str, _cache: dict[str, set[str]] = {}
     ) -> bool:
+        """检查名为 `name` 的路径是否已存在于目录 `rd` 下（带内部缓存）。
+
+        :param name: 文件/目录名
+        :param rd: 网盘目录路径
+        :param _cache: 内部缓存，调用方一般无需传入
+        :return: 是否已存在
+        """
         names = _cache.get(rd)
         if not names:
             names = set([PurePosixPath(sp.path).name for sp in self.list(rd)])
@@ -762,7 +954,16 @@ class BaiduPCSApi:
 
     def list_all_sub_paths(
         self, shared_path: str, uk: int, share_id: int, bdstoken: str, size=100
-    ) -> List[PcsSharedPath]:
+    ) -> list[PcsSharedPath]:
+        """分页列出分享目录 `shared_path` 下的全部子路径。
+
+        :param shared_path: 分享目录路径
+        :param uk: 分享者 uk
+        :param share_id: 分享 id
+        :param bdstoken: bdstoken
+        :param size: 单页数量
+        :return: 全部子路径的 `PcsSharedPath` 列表
+        """
         sub_paths = []
         for page in range(1, 1000):
             sps = self.list_shared_paths(

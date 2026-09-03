@@ -1,10 +1,8 @@
-from typing import Optional, List, Dict, NamedTuple
-from collections import namedtuple
-from urllib.parse import unquote
-
-from base64 import standard_b64encode
-
 import os
+from base64 import standard_b64encode
+from collections import namedtuple
+from typing import NamedTuple
+from urllib.parse import unquote
 
 
 class PcsRapidUploadInfo(NamedTuple):
@@ -14,7 +12,7 @@ class PcsRapidUploadInfo(NamedTuple):
     content_md5: str
     content_crc32: int
     content_length: int
-    remotepath: Optional[str] = None
+    remotepath: str | None = None
 
     def _filename(self) -> str:
         filename = os.path.basename(self.remotepath or "")
@@ -41,16 +39,14 @@ class PcsRapidUploadInfo(NamedTuple):
 
         filename = self._filename()
         return "bdpan://" + standard_b64encode(
-            f"{filename}|{self.content_length}|{self.content_md5}|{self.slice_md5}".encode(
-                "utf-8"
-            )
+            f"{filename}|{self.content_length}|{self.content_md5}|{self.slice_md5}".encode()
         ).decode("utf-8")
 
-    def all_links(self) -> List[str]:
+    def all_links(self) -> list[str]:
         return [self.cs3l(), self.short(), self.bdpan()]
 
     @staticmethod
-    def hash_link_protocols() -> List[str]:
+    def hash_link_protocols() -> list[str]:
         return ["cs3l", "short", "bdpan"]
 
     @staticmethod
@@ -81,24 +77,24 @@ class PcsFile(NamedTuple):
     """
 
     path: str  # remote absolute path
-    is_dir: Optional[bool] = None
-    is_file: Optional[bool] = None
-    fs_id: Optional[int] = None  # file id
-    size: Optional[int] = None
-    md5: Optional[str] = None
-    block_list: Optional[List[str]] = None  # block md5 list
-    category: Optional[int] = None
-    user_id: Optional[int] = None
-    ctime: Optional[int] = None  # server created time
-    mtime: Optional[int] = None  # server modifed time
-    local_ctime: Optional[int] = None  # local created time
-    local_mtime: Optional[int] = None  # local modifed time
-    server_ctime: Optional[int] = None  # server created time
-    server_mtime: Optional[int] = None  # server modifed time
-    shared: Optional[bool] = None  # this file is shared if True
+    is_dir: bool | None = None
+    is_file: bool | None = None
+    fs_id: int | None = None  # file id
+    size: int | None = None
+    md5: str | None = None
+    block_list: list[str] | None = None  # block md5 list
+    category: int | None = None
+    user_id: int | None = None
+    ctime: int | None = None  # server created time
+    mtime: int | None = None  # server modifed time
+    local_ctime: int | None = None  # local created time
+    local_mtime: int | None = None  # local modifed time
+    server_ctime: int | None = None  # server created time
+    server_mtime: int | None = None  # server modifed time
+    shared: bool | None = None  # this file is shared if True
 
-    rapid_upload_info: Optional[PcsRapidUploadInfo] = None
-    dl_link: Optional[str] = None
+    rapid_upload_info: PcsRapidUploadInfo | None = None
+    dl_link: str | None = None
 
     @staticmethod
     def from_(info) -> "PcsFile":
@@ -131,7 +127,7 @@ class PcsMagnetFile(NamedTuple):
     """
 
     path: str  # the file path in the magnet link
-    size: Optional[int] = None
+    size: int | None = None
 
     @staticmethod
     def from_(info) -> "PcsMagnetFile":
@@ -140,19 +136,19 @@ class PcsMagnetFile(NamedTuple):
 
 class PcsSharedLink(NamedTuple):
     url: str
-    paths: Optional[List[str]] = None
-    fs_ids: Optional[List[int]] = None
-    password: Optional[str] = None
+    paths: list[str] | None = None
+    fs_ids: list[int] | None = None
+    password: str | None = None
 
     # The remained second before expiring.
     # -1 means being expired
-    expired: Optional[int] = None
+    expired: int | None = None
 
     # channel == 4, has password
-    channel: Optional[bool] = None
+    channel: bool | None = None
 
-    share_id: Optional[int] = None
-    ctime: Optional[int] = None
+    share_id: int | None = None
+    ctime: int | None = None
 
     @staticmethod
     def from_(info) -> "PcsSharedLink":
@@ -196,15 +192,15 @@ class PcsSharedPath(NamedTuple):
     size: int
     is_dir: bool
     is_file: bool
-    md5: Optional[str] = None
-    local_ctime: Optional[int] = None  # local created time
-    local_mtime: Optional[int] = None  # local modifed time
-    server_ctime: Optional[int] = None  # server created time
-    server_mtime: Optional[int] = None  # server modifed time
+    md5: str | None = None
+    local_ctime: int | None = None  # local created time
+    local_mtime: int | None = None  # local modifed time
+    server_ctime: int | None = None  # server created time
+    server_mtime: int | None = None  # server modifed time
 
-    uk: Optional[int] = None
-    share_id: Optional[int] = None
-    bdstoken: Optional[str] = None
+    uk: int | None = None
+    share_id: int | None = None
+    bdstoken: str | None = None
 
     @staticmethod
     def from_(info) -> "PcsSharedPath":
@@ -239,9 +235,9 @@ class PcsQuota(NamedTuple):
 
 class PcsAuth(NamedTuple):
     bduss: str
-    cookies: Dict[str, Optional[str]]
-    stoken: Optional[str] = None
-    ptoken: Optional[str] = None
+    cookies: dict[str, str | None]
+    stoken: str | None = None
+    ptoken: str | None = None
 
 
 class PcsUserProduct(NamedTuple):
@@ -252,13 +248,13 @@ class PcsUserProduct(NamedTuple):
 
 class PcsUser(NamedTuple):
     user_id: int
-    user_name: Optional[str] = None
-    auth: Optional[PcsAuth] = None
-    age: Optional[float] = None
-    sex: Optional[str] = None
-    quota: Optional[PcsQuota] = None
-    products: Optional[List[PcsUserProduct]] = None
-    level: Optional[int] = None
+    user_name: str | None = None
+    auth: PcsAuth | None = None
+    age: float | None = None
+    sex: str | None = None
+    quota: PcsQuota | None = None
+    products: list[PcsUserProduct] | None = None
+    level: int | None = None
 
 
 TASK_STATUS_MSG = {
@@ -314,7 +310,7 @@ class CloudTask(NamedTuple):
             ftime=info.get("ftime"),
         )
 
-    def status_mean(self) -> Optional[str]:
+    def status_mean(self) -> str | None:
         return TASK_STATUS_MSG.get(self.status)
 
     def finished(self) -> bool:

@@ -1,10 +1,12 @@
 [project]
 name = "fundrive-baidu"
-version = "1.0.11"
-description = "fundrive"
+version = "1.0.12"
+description = "百度网盘（BaiduPCS）云存储 API 封装"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = [ "aget>=0.2.0", "chardet>=5.2.0", "click>=8.1.7", "cryptography>=44.0.0", "cython>=3.0.11", "funutil>=1.0.43", "jinja2>=3.1.4", "passlib>=1.7.4", "pillow>=10.4.0", "requests>=2.32.3", "requests-toolbelt>=1.0.0", "rich>=13.9.4", "typing-extensions>=4.12.2",]
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = [ "aget>=0.2.0", "chardet>=5.2.0", "click>=8.1.7", "cryptography>=44.0.0", "cython>=3.0.11", "farlog>=1.1.7", "jinja2>=3.1.4", "passlib>=1.7.4", "pillow>=10.4.0", "requests>=2.32.3", "requests-toolbelt>=1.0.0", "rich>=13.9.4",]
 [[project.authors]]
 name = "牛哥"
 email = "niuliangtao@qq.com"
@@ -25,9 +27,6 @@ email = "farfarfun@qq.com"
 Organization = "https://github.com/farfarfun"
 Repository = "https://github.com/farfarfun/fundrive-baidu"
 Releases = "https://github.com/farfarfun/fundrive-baidu/releases"
-
-[tool.setuptools]
-license-files = []
 
 [build-system]
 requires = ["hatchling"]

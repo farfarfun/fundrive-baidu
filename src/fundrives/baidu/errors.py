@@ -1,5 +1,5 @@
 from functools import wraps
-from typing import Any, Optional
+from typing import Any
 
 ERRORS = {
     0: 0,
@@ -116,13 +116,13 @@ UNKNOWN_ERROR = "未知错误"
 
 
 class BaiduPCSError(Exception):
-    def __init__(self, message: str, error_code: Optional[int] = None, cause=None):
+    def __init__(self, message: str, error_code: int | None = None, cause=None):
         self.__cause__ = cause
         self.error_code = error_code
         super().__init__(message)
 
 
-def parse_errno(error_code: int, info: Any = None) -> Optional[BaiduPCSError]:
+def parse_errno(error_code: int, info: Any = None) -> BaiduPCSError | None:
     if error_code != 0:
         mean = ERRORS.get(error_code, info or UNKNOWN_ERROR)
         msg = f"error_code: {error_code}, message: {mean}"
