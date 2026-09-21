@@ -71,9 +71,9 @@ class BaiduPCSApi:
         bduss: str | None = None,
         stoken: str | None = None,
         ptoken: str | None = None,
-        cookies: dict[str, str | None] = {},
+        cookies: dict[str, str | None] | None = None,
         user_id: int | None = None,
-    ):
+    ) -> None:
         """初始化百度网盘 API 客户端。
 
         :param bduss: 百度账号登录凭据 BDUSS
@@ -210,7 +210,7 @@ class BaiduPCSApi:
         io: IO,
         remotepath: str,
         ondup="overwrite",
-        callback: Callable[[MultipartEncoderMonitor], None] = None,
+        callback: Callable[[MultipartEncoderMonitor], None] | None = None,
     ) -> PcsFile:
         """上传一个 IO 对象到 `remotepath`。
 
@@ -265,7 +265,7 @@ class BaiduPCSApi:
         return PcsFile.from_(info)
 
     def upload_slice(
-        self, io: IO, callback: Callable[[MultipartEncoderMonitor], None] = None
+        self, io: IO, callback: Callable[[MultipartEncoderMonitor], None] | None = None
     ) -> str:
         """上传一个 IO 对象作为分片。
 
@@ -745,7 +745,7 @@ class BaiduPCSApi:
         self,
         remotepath: str,
         max_chunk_size: int = MAX_CHUNK_SIZE,
-        callback: Callable[..., None] = None,
+        callback: Callable[..., None] | None = None,
         encrypt_password: bytes = b"",
         pcs: bool = False,
     ) -> RangeRequestIO | None:

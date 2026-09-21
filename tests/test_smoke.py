@@ -82,6 +82,17 @@ def test_baidupcs_construct_with_user_id_skips_network():
     assert pcs._user_id == 123456
 
 
+def test_baidupcs_reads_credentials_from_environment(monkeypatch):
+    """未显式传参时从环境变量读取凭据。"""
+    from fundrives.baidu import BaiduPCS
+
+    monkeypatch.setenv("BDUSS", "env-bduss")
+    with _NetworkGuard():
+        pcs = BaiduPCS(user_id=123456)
+
+    assert pcs._bduss == "env-bduss"
+
+
 def test_baidupcsapi_construct_with_user_id_skips_network():
     """`BaiduPCSApi` 是 `BaiduPCS` 的包装类，同样验证可在不联网的情况下完成构造。"""
     from fundrives.baidu import BaiduPCSApi

@@ -1050,7 +1050,7 @@ class RangeRequestIO(IO):
         url: str,
         headers: dict[str, str] | None = None,
         max_chunk_size: int = MAX_CHUNK_SIZE,
-        callback: Callable[..., None] = None,
+        callback: Callable[..., None] | None = None,
         encrypt_password: bytes = b"",
         **kwargs,
     ):

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import random
 import re
 import time
@@ -90,9 +91,13 @@ class BaiduPCS:
         bduss: str | None = None,
         stoken: str | None = None,
         ptoken: str | None = None,
-        cookies: dict[str, str | None] = {},
+        cookies: dict[str, str | None] | None = None,
         user_id: int | None = None,
-    ):
+    ) -> None:
+        cookies = cookies or {}
+        bduss = bduss or os.getenv("BDUSS")
+        stoken = stoken or os.getenv("STOKEN")
+        ptoken = ptoken or os.getenv("PTOKEN")
         if not bduss and cookies and cookies.get("BDUSS", ""):
             bduss = cookies["BDUSS"]
         if not stoken and cookies and cookies.get("STOKEN", ""):
@@ -134,8 +139,8 @@ class BaiduPCS:
         return self._session.cookies.get_dict()
 
     @staticmethod
-    def _app_id(url: str):
-        """Select app_id based on `url`"""
+    def _app_id(url: str) -> str:
+        """根据 URL 选择应用 ID。"""
 
         if PCS_BAIDU_COM in url:
             return PCS_APP_ID
@@ -160,15 +165,15 @@ class BaiduPCS:
         return ""
 
     @staticmethod
-    def _headers(url: str):
-        """Select headers based on `url`"""
+    def _headers(url: str) -> dict[str, str]:
+        """根据 URL 选择请求头。"""
 
         if PCS_BAIDU_COM in url:
             return dict(PCS_HEADERS)
         else:
             return dict(PAN_HEADERS)
 
-    def _cookies_update(self, cookies: dict[str, str]):
+    def _cookies_update(self, cookies: dict[str, str]) -> None:
         self._session.cookies.update(cookies)
 
     def _request(
@@ -216,15 +221,15 @@ class BaiduPCS:
         return self._request(Method.Get, url, params=params, headers=headers)
 
     @assert_ok
-    def quota(self):
-        """Quota space information"""
+    def quota(self) -> dict[str, Any]:
+        """返回网盘容量信息。"""
 
         url = PcsNode.Quota.url()
         params = {"method": "info"}
         resp = self._request(Method.Get, url, params=params)
         return resp.json()
 
-    def meta(self, *remotepaths: str):
+    def meta(self, *remotepaths: str) -> dict[str, Any]:
         assert all([p.startswith("/") for p in remotepaths]), (
             "`remotepaths` must be absolute paths"
         )
@@ -265,7 +270,7 @@ class BaiduPCS:
         name: bool = False,
         time: bool = False,
         size: bool = False,
-    ):
+    ) -> dict[str, Any]:
         url = PcsNode.File.url()
         orderby = None
         if name:
@@ -292,13 +297,10 @@ class BaiduPCS:
         self,
         io: IO,
         remotepath: str,
-        ondup="overwrite",
-        callback: Callable[[MultipartEncoderMonitor], None] = None,
-    ):
-        """Upload the content of io to remotepath
-
-        WARNING: This api can not set local_ctime and local_mtime
-        """
+        ondup: str = "overwrite",
+        callback: Callable[[MultipartEncoderMonitor], None] | None = None,
+    ) -> dict[str, Any]:
+        """上传 IO 内容到远程路径（不支持设置本地创建和修改时间）。"""
 
         assert remotepath.startswith("/"), "`remotepath` must be an absolute path"
         remotePath = Path(remotepath)
@@ -328,9 +330,9 @@ class BaiduPCS:
         remotepath: str,
         local_ctime: int | None = None,
         local_mtime: int | None = None,
-        ondup="overwrite",
-    ):
-        """Rapid Upload File
+        ondup: str = "overwrite",
+    ) -> dict[str, Any]:
+        """通过文件摘要快速上传。
 
         slice_md5 (32 bytes): the md5 of pre 256KB of content.
         content_md5 (32 bytes): the md5 of total content.
@@ -370,8 +372,8 @@ class BaiduPCS:
 
     @assert_ok
     def upload_slice(
-        self, io: IO, callback: Callable[[MultipartEncoderMonitor], None] = None
-    ):
+        self, io: IO, callback: Callable[[MultipartEncoderMonitor], None] | None = None
+    ) -> dict[str, Any]:
         url = PcsNode.File.url()
         params = {
             "method": "upload",
@@ -398,8 +400,8 @@ class BaiduPCS:
         remotepath: str,
         local_ctime: int | None = None,
         local_mtime: int | None = None,
-        ondup="overwrite",
-    ):
+        ondup: str = "overwrite",
+    ) -> dict[str, Any]:
         url = PcsNode.File.url()
         params = {
             "method": "createsuperfile",
@@ -419,7 +421,9 @@ class BaiduPCS:
         return resp.json()
 
     @assert_ok
-    def search(self, keyword: str, remotepath: str, recursive: bool = False):
+    def search(
+        self, keyword: str, remotepath: str, recursive: bool = False
+    ) -> dict[str, Any]:
         url = PcsNode.File.url()
         params = {
             "method": "search",
@@ -431,7 +435,7 @@ class BaiduPCS:
         return resp.json()
 
     @assert_ok
-    def makedir(self, directory: str):
+    def makedir(self, directory: str) -> dict[str, Any]:
         url = PcsNode.File.url()
         params = {
             "method": "mkdir",
@@ -440,7 +444,7 @@ class BaiduPCS:
         resp = self._request(Method.Get, url, params=params)
         return resp.json()
 
-    def file_operate(self, operate: str, param: list[dict[str, str]]):
+    def file_operate(self, operate: str, param: list[dict[str, str]]) -> dict[str, Any]:
         url = PcsNode.File.url()
         params = {"method": operate}
         data = {"param": dump_json({"list": param})}
@@ -448,7 +452,7 @@ class BaiduPCS:
         return resp.json()
 
     @assert_ok
-    def move(self, *remotepaths: str):
+    def move(self, *remotepaths: str) -> dict[str, Any]:
         """
         Move sources to destination
 
@@ -476,8 +480,8 @@ class BaiduPCS:
         return self.file_operate("move", param)
 
     @assert_ok
-    def rename(self, source: str, dest: str):
-        """Rename `source` to `dest`"""
+    def rename(self, source: str, dest: str) -> dict[str, Any]:
+        """重命名远程路径。"""
 
         assert all([p.startswith("/") for p in [source, dest]]), (
             "`source`, `dest` must be absolute paths"
@@ -487,7 +491,7 @@ class BaiduPCS:
         return self.file_operate("move", param)
 
     @assert_ok
-    def copy(self, *remotepaths: str):
+    def copy(self, *remotepaths: str) -> dict[str, Any]:
         """
         Copy sources to destination
 
@@ -515,7 +519,7 @@ class BaiduPCS:
         return self.file_operate("copy", param)
 
     @assert_ok
-    def remove(self, *remotepaths: str):
+    def remove(self, *remotepaths: str) -> dict[str, Any]:
         assert all([p.startswith("/") for p in remotepaths]), (
             "`sources`, `dest` must be absolute paths"
         )
@@ -524,7 +528,9 @@ class BaiduPCS:
         return self.file_operate("delete", param)
 
     @assert_ok
-    def cloud_operate(self, params: dict[str, str], data: dict[str, str] | None = None):
+    def cloud_operate(
+        self, params: dict[str, str], data: dict[str, str] | None = None
+    ) -> dict[str, Any]:
         url = PanNode.Cloud.url()
         if data:
             resp = self._request(Method.Post, url, params=params, data=data)
@@ -532,7 +538,7 @@ class BaiduPCS:
             resp = self._request(Method.Get, url, params=params)
         return resp.json()
 
-    def magnet_info(self, magnet: str):
+    def magnet_info(self, magnet: str) -> dict[str, Any]:
         params = {
             "method": "query_magnetinfo",
             "source_url": magnet,
@@ -541,7 +547,7 @@ class BaiduPCS:
         }
         return self.cloud_operate(params)
 
-    def torrent_info(self, remote_torrent: str):
+    def torrent_info(self, remote_torrent: str) -> dict[str, Any]:
         params = {
             "method": "query_sinfo",
             "source_path": remote_torrent,
@@ -551,7 +557,7 @@ class BaiduPCS:
         }
         return self.cloud_operate(params)
 
-    def add_task(self, task_url: str, remotedir: str):
+    def add_task(self, task_url: str, remotedir: str) -> dict[str, Any]:
         """Add cloud task for http/s and ed2k url
 
         Warning: `STOKEN` must be in `cookies`
@@ -576,7 +582,9 @@ class BaiduPCS:
         }
         return self.cloud_operate(params, data=data)
 
-    def add_magnet_task(self, task_url: str, remotedir: str, selected_idx: list[int]):
+    def add_magnet_task(
+        self, task_url: str, remotedir: str, selected_idx: list[int]
+    ) -> dict[str, Any]:
         """Add cloud task for magnet
 
         Args:
@@ -610,14 +618,14 @@ class BaiduPCS:
         }
         return self.cloud_operate(params, data=data)
 
-    def tasks(self, *task_ids: str):
+    def tasks(self, *task_ids: str) -> dict[str, Any]:
         params = {
             "method": "query_task",
             "task_ids": ",".join(task_ids),
         }
         return self.cloud_operate(params)
 
-    def list_tasks(self):
+    def list_tasks(self) -> dict[str, Any]:
         params = {
             "method": "list_task",
             "need_task_info": "1",
@@ -627,13 +635,13 @@ class BaiduPCS:
         }
         return self.cloud_operate(params)
 
-    def clear_tasks(self):
+    def clear_tasks(self) -> dict[str, Any]:
         params = {
             "method": "clear_task",
         }
         return self.cloud_operate(params)
 
-    def cancel_task(self, task_id: str):
+    def cancel_task(self, task_id: str) -> dict[str, Any]:
         params = {
             "method": "cancel_task",
             "task_id": task_id,
@@ -641,7 +649,9 @@ class BaiduPCS:
         return self.cloud_operate(params)
 
     @assert_ok
-    def share(self, *remotepaths: str, password: str, period: int = 0):
+    def share(
+        self, *remotepaths: str, password: str, period: int = 0
+    ) -> dict[str, Any]:
         """Share `remotepaths` to public
 
         period (int): The days for expiring. `0` means no expiring
@@ -674,7 +684,7 @@ class BaiduPCS:
         return resp.json()
 
     @assert_ok
-    def list_shared(self, page: int = 1):
+    def list_shared(self, page: int = 1) -> dict[str, Any]:
         """
         list.0.channel:
             - 0, no password
@@ -691,7 +701,7 @@ class BaiduPCS:
         return resp.json()
 
     @assert_ok
-    def shared_password(self, share_id: int):
+    def shared_password(self, share_id: int) -> dict[str, Any]:
         """
         Only return password
         """
@@ -705,7 +715,7 @@ class BaiduPCS:
         return resp.json()
 
     @assert_ok
-    def cancel_shared(self, *share_ids: int):
+    def cancel_shared(self, *share_ids: int) -> dict[str, Any]:
         url = PanNode.SharedCancel.url()
         data = {
             "shareid_list": dump_json(share_ids),
@@ -721,7 +731,9 @@ class BaiduPCS:
         return f"https://pan.baidu.com/share/init?surl={surl}"
 
     @assert_ok
-    def access_shared(self, shared_url: str, password: str, vcode_str: str, vcode: str):
+    def access_shared(
+        self, shared_url: str, password: str, vcode_str: str, vcode: str
+    ) -> dict[str, Any]:
         """Pass password to the session
 
         WARNING: this method is not threadsafe.
@@ -776,7 +788,7 @@ class BaiduPCS:
         return resp.content
 
     @assert_ok
-    def shared_paths(self, shared_url: str):
+    def shared_paths(self, shared_url: str) -> dict[str, Any]:
         """Get shared paths
 
         Call `BaiduPCS.access_share` before calling the function
@@ -801,7 +813,7 @@ class BaiduPCS:
     @assert_ok
     def list_shared_paths(
         self, sharedpath: str, uk: int, share_id: int, page: int = 1, size: int = 100
-    ):
+    ) -> dict[str, Any]:
         assert self._stoken, "`STOKEN` is not in `cookies`"
 
         url = PanNode.SharedPathList.url()
@@ -832,7 +844,7 @@ class BaiduPCS:
         share_id: int,
         bdstoken: str,
         shared_url: str,
-    ):
+    ) -> dict[str, Any]:
         """`remotedir` must exist"""
 
         url = PanNode.TransferShared.url()
@@ -861,7 +873,7 @@ class BaiduPCS:
         return info
 
     @assert_ok
-    def user_info(self):
+    def user_info(self) -> dict[str, Any]:
         bduss = self._bduss
         timestamp = str(now_timestamp())
         model = get_phone_model(bduss)
@@ -912,7 +924,7 @@ class BaiduPCS:
         return resp.json()
 
     @assert_ok
-    def tieba_user_info(self, user_id: int):
+    def tieba_user_info(self, user_id: int) -> dict[str, Any]:
         params = f"has_plist=0&need_post_count=1&rn=1&uid={user_id}"
         params += "&sign=" + calu_md5(params.replace("&", "") + "tiebaclient!!!")
         url = "http://c.tieba.baidu.com/c/u/user/profile?" + params
@@ -928,7 +940,7 @@ class BaiduPCS:
         return resp.json()
 
     @assert_ok
-    def user_products(self):
+    def user_products(self) -> dict[str, Any]:
         url = PanNode.UserProducts.url()
         params = {
             "method": "query",
@@ -1038,7 +1050,9 @@ class BaiduPCS:
     # Playing the m3u8 file is needed add `--stream-lavf-o-append="protocol_whitelist=file,http,https,tcp,tls,crypto,hls,applehttp"` for mpv
     # https://github.com/mpv-player/mpv/issues/6928#issuecomment-532198445
     @assert_ok
-    def m3u8_stream(self, remotepath: str, type: M3u8Type = "M3U8_AUTO_720"):
+    def m3u8_stream(
+        self, remotepath: str, type: M3u8Type = "M3U8_AUTO_720"
+    ) -> dict[str, Any]:
         """Get content of the m3u8 stream file"""
 
         url = PcsNode.File.url()

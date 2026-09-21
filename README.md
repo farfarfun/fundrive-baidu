@@ -14,12 +14,19 @@ uv add fundrive-baidu
 
 ## 快速开始
 
-使用百度账号登录后获取的 `BDUSS`（以及分享相关接口需要的 `STOKEN`）创建客户端：
+请先通过环境变量提供凭据，避免把敏感信息写入源码或命令历史：
+
+```bash
+export BDUSS="从百度账号获取的 BDUSS"
+export STOKEN="分享接口需要的 STOKEN"
+```
+
+客户端会自动读取 `BDUSS`、`STOKEN` 和可选的 `PTOKEN`；也可以在受信任的凭据管理器中读取后显式传入。
 
 ```python
 from fundrives.baidu import BaiduPCSApi
 
-api = BaiduPCSApi(bduss="your-bduss", stoken="your-stoken")
+api = BaiduPCSApi()
 
 # 列出网盘根目录文件
 for pcs_file in api.list("/"):
