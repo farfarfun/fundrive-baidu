@@ -2,6 +2,20 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)，变更记录按版本倒序排列。
 
+## [未发布]
+
+### 修复
+
+- 函数缓存改用组织自有包 `farcache`（`ttl_cache`），移除自建的 `TimeoutCache`/`timeout_cache`
+- 凭据、路径、分享密码等运行时校验由 `assert` 改为显式条件判断并抛出 `BaiduPCSError`，避免在 Python 优化模式下被跳过而失去校验
+- 修复 `_request`/`remote_path_exists`/`RapidUploadInfo.list` 等处的可变默认参数（`{}`/`[]`）跨调用共享状态问题
+- `phone.py` 的 `sum_IMEI` 重命名为 `sum_imei`（`snake_case`），旧名称保留为带 `DeprecationWarning` 的兼容入口
+
+### 新增
+
+- 补充 `BaiduPCS` 类与 `shared_init_url`/`getcaptcha`/`get_vcode_img` 等公开方法的中文 docstring
+- 为 `upload_file`/`rapid_upload_file`/`upload_slice`/`download_link`/`file_stream`、离线任务管理（`add_task`/`list_tasks`/`clear_tasks`/`cancel_task`）、`transfer_shared_paths` 等此前缺失覆盖的公开 API 补充基于 mock 的正常路径与边界测试
+
 ## [1.0.13] - 2026-09-21
 
 ### 修复

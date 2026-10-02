@@ -258,3 +258,158 @@ def test_sum_imei_keeps_legacy_alias_with_warning():
         actual = sum_IMEI("key")
 
     assert actual == expected
+
+
+def test_upload_file_returns_pcsfile():
+    api = _api()
+    api._baidupcs.upload_file = MagicMock(
+        return_value={"path": "/a.txt", "isdir": 0, "fs_id": 1, "size": 10}
+    )
+
+    pcs_file = api.upload_file(io=MagicMock(), remotepath="/a.txt")
+
+    assert pcs_file.path == "/a.txt"
+    api._baidupcs.upload_file.assert_called_once()
+
+
+def test_upload_file_rejects_relative_path():
+    """底层 `BaiduPCS.upload_file` 对非绝对路径应抛出领域异常而非静默失败。"""
+    pcs = BaiduPCS(bduss="dummy-bduss", user_id=1)
+
+    with pytest.raises(BaiduPCSError, match="BaiduPCS.upload_file"):
+        pcs.upload_file(io=MagicMock(), remotepath="relative/a.txt")
+
+
+def test_rapid_upload_file_returns_pcsfile():
+    api = _api()
+    api._baidupcs.rapid_upload_file = MagicMock(
+        return_value={"path": "/a.txt", "isdir": 0, "fs_id": 1, "size": 10}
+    )
+
+    pcs_file = api.rapid_upload_file(
+        slice_md5="a" * 32,
+        content_md5="b" * 32,
+        content_crc32=0,
+        io_len=10,
+        remotepath="/a.txt",
+    )
+
+    assert pcs_file.path == "/a.txt"
+
+
+def test_rapid_upload_file_rejects_relative_path():
+    pcs = BaiduPCS(bduss="dummy-bduss", user_id=1)
+
+    with pytest.raises(BaiduPCSError, match="BaiduPCS.rapid_upload_file"):
+        pcs.rapid_upload_file(
+            slice_md5="a" * 32,
+            content_md5="b" * 32,
+            content_crc32=0,
+            io_len=10,
+            remotepath="relative/a.txt",
+        )
+
+
+def test_upload_slice_returns_md5():
+    api = _api()
+    api._baidupcs.upload_slice = MagicMock(return_value={"md5": "deadbeef"})
+
+    assert api.upload_slice(io=MagicMock()) == "deadbeef"
+
+
+def test_download_link_returns_link_on_success():
+    api = _api()
+    api._baidupcs.download_link = MagicMock(return_value="https://example.com/a.txt")
+
+    assert api.download_link("/a.txt") == "https://example.com/a.txt"
+
+
+def test_download_link_returns_none_when_missing():
+    api = _api()
+    api._baidupcs.download_link = MagicMock(return_value=None)
+
+    assert api.download_link("/missing.txt") is None
+
+
+def test_file_stream_returns_none_when_missing():
+    api = _api()
+    api._baidupcs.file_stream = MagicMock(return_value=None)
+
+    assert api.file_stream("/missing.txt") is None
+
+
+def test_file_stream_returns_io_on_success():
+    api = _api()
+    fake_io = MagicMock()
+    api._baidupcs.file_stream = MagicMock(return_value=fake_io)
+
+    assert api.file_stream("/a.txt") is fake_io
+
+
+def test_add_task_returns_task_id():
+    api = _api()
+    api._baidupcs.add_task = MagicMock(return_value={"task_id": 123})
+
+    assert api.add_task("https://example.com/a.torrent", "/dir") == "123"
+
+
+def test_list_tasks_returns_cloud_tasks():
+    api = _api()
+    api._baidupcs.list_tasks = MagicMock(
+        return_value={
+            "task_info": [
+                {
+                    "task_id": "1",
+                    "source_url": "https://example.com/a",
+                    "task_name": "a",
+                    "save_path": "/dir",
+                    "status": 2,
+                    "size": "100",
+                    "finished_size": "100",
+                    "ctime": 1,
+                    "stime": 1,
+                    "ftime": 2,
+                }
+            ]
+        }
+    )
+
+    tasks = api.list_tasks()
+
+    assert len(tasks) == 1
+    assert tasks[0].task_id == "1"
+    assert tasks[0].status == 2
+
+
+def test_clear_tasks_returns_total():
+    api = _api()
+    api._baidupcs.clear_tasks = MagicMock(return_value={"total": 3})
+
+    assert api.clear_tasks() == 3
+
+
+def test_cancel_task_delegates_to_baidupcs():
+    api = _api()
+    api._baidupcs.cancel_task = MagicMock()
+
+    api.cancel_task("task-1")
+
+    api._baidupcs.cancel_task.assert_called_once_with("task-1")
+
+
+def test_transfer_shared_paths_delegates_with_all_params():
+    api = _api()
+    api._baidupcs.transfer_shared_paths = MagicMock()
+
+    api.transfer_shared_paths(
+        remotedir="/dir",
+        fs_ids=[1, 2],
+        uk=1,
+        share_id=2,
+        bdstoken="token",
+        shared_url="https://pan.baidu.com/s/1abc",
+    )
+
+    api._baidupcs.transfer_shared_paths.assert_called_once_with(
+        "/dir", [1, 2], 1, 2, "token", "https://pan.baidu.com/s/1abc"
+    )
