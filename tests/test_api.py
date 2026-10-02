@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from fundrives.baidu import BaiduPCSApi
+from fundrives.baidu import BaiduPCS, BaiduPCSApi
 from fundrives.baidu.errors import BaiduPCSError
 
 
@@ -220,3 +220,41 @@ def test_unify_shared_url_normalizes_standard_link():
     url = _unify_shared_url("https://pan.baidu.com/s/1AbCdEfG?pwd=1234")
 
     assert url == "https://pan.baidu.com/s/1AbCdEfG"
+
+
+def test_invalid_remote_path_raises_domain_error():
+    pcs = BaiduPCS(bduss="dummy-bduss", user_id=1)
+
+    with pytest.raises(BaiduPCSError, match="BaiduPCS.meta"):
+        pcs.meta("relative/path")
+
+
+def test_share_rejects_invalid_password_before_request():
+    pcs = BaiduPCS(bduss="dummy-bduss", stoken="dummy-stoken", user_id=1)
+
+    with pytest.raises(BaiduPCSError, match="password 必须为 4 个字符"):
+        pcs.share("/a.txt", password="123")
+
+
+def test_remote_path_cache_is_isolated_per_instance():
+    first = _api()
+    second = _api()
+    first.list = MagicMock(return_value=[])
+    second.list = MagicMock(return_value=[])
+
+    first.remote_path_exists("a.txt", "/")
+    first.remote_path_exists("b.txt", "/")
+    second.remote_path_exists("a.txt", "/")
+
+    first.list.assert_called_once_with("/")
+    second.list.assert_called_once_with("/")
+
+
+def test_sum_imei_keeps_legacy_alias_with_warning():
+    from fundrives.baidu.phone import sum_IMEI, sum_imei
+
+    expected = sum_imei("key")
+    with pytest.warns(DeprecationWarning, match="sum_IMEI 已弃用"):
+        actual = sum_IMEI("key")
+
+    assert actual == expected

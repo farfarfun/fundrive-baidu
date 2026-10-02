@@ -85,6 +85,7 @@ class BaiduPCSApi:
         self._baidupcs = BaiduPCS(
             bduss, stoken=stoken, ptoken=ptoken, cookies=cookies, user_id=user_id
         )
+        self._remote_path_cache: dict[str, set[str]] = {}
 
     @property
     def bduss(self) -> str:
@@ -591,9 +592,11 @@ class BaiduPCSApi:
 
         info = self._baidupcs.shared_paths(shared_url)
         uk = info.get("share_uk") or info.get("uk")
+        if not uk:
+            raise BaiduPCSError(
+                f"BaiduPCSApi.shared_paths: 分享信息中缺少 uk: {shared_url!r}"
+            )
         uk = int(uk)
-
-        assert uk, "`BaiduPCSApi.shared_paths`: Don't get `uk`"
 
         share_id = info["shareid"]
         bdstoken = info["bdstoken"]
@@ -804,13 +807,20 @@ class BaiduPCSApi:
             return None
 
         data = fs.read(256 * constant.OneK)
-        assert data and len(data) == 256 * constant.OneK
+        if not data or len(data) != 256 * constant.OneK:
+            raise BaiduPCSError(
+                f"BaiduPCSApi.rapid_upload_info: 未能读取 256 KiB 数据: {remotepath!r}"
+            )
 
         slice_md5 = calu_md5(data)
 
-        assert (
-            content_length and content_length == fs._auto_decrypt_request.content_length
-        )
+        response_length = fs._auto_decrypt_request.content_length
+        if not content_length or content_length != response_length:
+            raise BaiduPCSError(
+                "BaiduPCSApi.rapid_upload_info: "
+                f"文件长度不一致: path={remotepath!r}, meta={content_length}, "
+                f"response={response_length}"
+            )
 
         content_md5 = fs._auto_decrypt_request.content_md5
         content_crc32 = fs._auto_decrypt_request.content_crc32 or 0
@@ -937,7 +947,7 @@ class BaiduPCSApi:
                 shared_paths.extendleft(sub_paths[::-1])
 
     def remote_path_exists(
-        self, name: str, rd: str, _cache: dict[str, set[str]] = {}
+        self, name: str, rd: str, _cache: dict[str, set[str]] | None = None
     ) -> bool:
         """检查名为 `name` 的路径是否已存在于目录 `rd` 下（带内部缓存）。
 
@@ -946,9 +956,11 @@ class BaiduPCSApi:
         :param _cache: 内部缓存，调用方一般无需传入
         :return: 是否已存在
         """
+        if _cache is None:
+            _cache = self._remote_path_cache
         names = _cache.get(rd)
-        if not names:
-            names = set([PurePosixPath(sp.path).name for sp in self.list(rd)])
+        if names is None:
+            names = {PurePosixPath(sp.path).name for sp in self.list(rd)}
             _cache[rd] = names
         return name in names
 

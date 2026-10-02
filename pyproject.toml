@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
-dependencies = [ "cryptography>=44.0.0", "farlog>=1.1.7", "passlib>=1.7.4", "pillow>=10.4.0", "requests>=2.32.3", "requests-toolbelt>=1.0.0", "rich>=13.9.4",]
+dependencies = [ "cryptography>=44.0.0", "farcache>=2.0.3", "farlog>=1.1.7", "passlib>=1.7.4", "pillow>=10.4.0", "requests>=2.32.3", "requests-toolbelt>=1.0.0", "rich>=13.9.4",]
 [[project.authors]]
 name = "牛哥"
 email = "niuliangtao@qq.com"

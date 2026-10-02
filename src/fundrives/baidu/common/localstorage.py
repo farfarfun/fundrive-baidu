@@ -108,7 +108,7 @@ class RapidUploadInfo:
 
     def list(
         self,
-        ids: list[int] = [],
+        ids: list[int] | None = None,
         by_filename: bool = False,
         by_time: bool = False,
         by_size: bool = False,

@@ -61,9 +61,9 @@ def test_import_public_api_symbols():
 
 def test_baidupcs_requires_credentials():
     """`BaiduPCS` 在既没有 bduss 也没有 cookies 时应当明确拒绝构造，而不是静默成功。"""
-    from fundrives.baidu import BaiduPCS
+    from fundrives.baidu import BaiduPCS, BaiduPCSError
 
-    with pytest.raises(AssertionError):
+    with pytest.raises(BaiduPCSError, match="缺少 BDUSS"):
         BaiduPCS()
 
 

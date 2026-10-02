@@ -341,8 +341,12 @@ PHONE_MODEL_DATABASE = [
 ]
 
 
-# 根据key计算出imei
-def sum_IMEI(key: str):
+def sum_imei(key: str) -> str:
+    """根据键值生成稳定的伪 IMEI。
+
+    :param key: 用于计算 IMEI 的字符串
+    :return: 15 位 IMEI 字符串
+    """
     hs = 53202347234687234
     for k in key:
         hs += (hs << 5) + ord(k)
@@ -352,8 +356,24 @@ def sum_IMEI(key: str):
     return str(int(hs))
 
 
-# 根据key, 从 PHONE_MODEL_DATABASE 中取出手机型号
-def get_phone_model(key: str):
+def sum_IMEI(key: str) -> str:
+    """兼容旧版名称；请改用 :func:`sum_imei`。"""
+    import warnings
+
+    warnings.warn(
+        "sum_IMEI 已弃用，请改用 sum_imei；旧名称将在 2.0 移除",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return sum_imei(key)
+
+
+def get_phone_model(key: str) -> str:
+    """根据键值从手机型号库中稳定选择一个型号。
+
+    :param key: 用于选择手机型号的字符串
+    :return: 手机型号名称
+    """
     if len(PHONE_MODEL_DATABASE) <= 0:
         return "S3"
     hs = 2134

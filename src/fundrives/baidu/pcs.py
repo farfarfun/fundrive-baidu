@@ -15,14 +15,14 @@ from urllib.error import HTTPError
 from urllib.parse import quote_plus, urlparse
 
 import requests  # type: ignore
+from farcache import ttl_cache
 from requests_toolbelt import MultipartEncoder, MultipartEncoderMonitor
 
-from .common.cache import timeout_cache
 from .common.crypto import calu_md5, calu_sha1
 from .common.date import now_timestamp
 from .common.io import MAX_CHUNK_SIZE, RangeRequestIO
 from .errors import BaiduPCSError, assert_ok
-from .phone import get_phone_model, sum_IMEI
+from .phone import get_phone_model, sum_imei
 from .utils import dump_json
 
 PCS_BAIDU_COM = "https://pcs.baidu.com"
@@ -84,7 +84,7 @@ class PanNode(Enum):
 
 
 class BaiduPCS:
-    """`BaiduPCS` provides pcs's apis which return raw json"""
+    """提供返回原始 JSON 数据的百度网盘 PCS 接口。"""
 
     def __init__(
         self,
@@ -105,7 +105,10 @@ class BaiduPCS:
         if not ptoken and cookies and cookies.get("PTOKEN", ""):
             ptoken = cookies["PTOKEN"]
 
-        assert bduss, "`bduss` must be set. Or `BDUSS` is in `cookies`."
+        if not bduss:
+            raise BaiduPCSError(
+                "BaiduPCS.__init__: 缺少 BDUSS，请通过参数、cookies 或环境变量提供"
+            )
 
         if not cookies:
             cookies = {"BDUSS": bduss, "STOKEN": stoken, "PTOKEN": ptoken}
@@ -149,7 +152,8 @@ class BaiduPCS:
 
     @property
     def bdstoken(self) -> str:
-        assert self._stoken or self._cookies.get("STOKEN")
+        if not (self._stoken or self._cookies.get("STOKEN")):
+            raise BaiduPCSError("BaiduPCS.bdstoken: cookies 中缺少 STOKEN")
 
         if self._bdstoken:
             return self._bdstoken
@@ -180,7 +184,7 @@ class BaiduPCS:
         self,
         method: Method,
         url: str,
-        params: dict[str, str] | None = {},
+        params: dict[str, str] | None = None,
         headers: dict[str, str] | None = None,
         data: str | bytes | dict[str, str] | Any = None,
         files: dict[str, Any] | None = None,
@@ -214,7 +218,7 @@ class BaiduPCS:
     def _request_get(
         self,
         url: str,
-        params: dict[str, str] | None = {},
+        params: dict[str, str] | None = None,
         headers: dict[str, str] | None = None,
         **kwargs,
     ) -> requests.Response:
@@ -230,9 +234,10 @@ class BaiduPCS:
         return resp.json()
 
     def meta(self, *remotepaths: str) -> dict[str, Any]:
-        assert all([p.startswith("/") for p in remotepaths]), (
-            "`remotepaths` must be absolute paths"
-        )
+        if not remotepaths or not all(p.startswith("/") for p in remotepaths):
+            raise BaiduPCSError(
+                f"BaiduPCS.meta: remotepaths 必须是非空的绝对路径列表: {remotepaths!r}"
+            )
 
         param = [{"path": p} for p in remotepaths]
         return self.file_operate("meta", param)
@@ -302,7 +307,10 @@ class BaiduPCS:
     ) -> dict[str, Any]:
         """上传 IO 内容到远程路径（不支持设置本地创建和修改时间）。"""
 
-        assert remotepath.startswith("/"), "`remotepath` must be an absolute path"
+        if not remotepath.startswith("/"):
+            raise BaiduPCSError(
+                f"BaiduPCS.upload_file: remotepath 必须是绝对路径: {remotepath!r}"
+            )
         remotePath = Path(remotepath)
 
         url = PcsNode.File.url()
@@ -342,7 +350,10 @@ class BaiduPCS:
         remotepath (str): the absolute remote path to save the content.
         """
 
-        assert remotepath.startswith("/"), "`remotepath` must be an absolute path"
+        if not remotepath.startswith("/"):
+            raise BaiduPCSError(
+                f"BaiduPCS.rapid_upload_file: remotepath 必须是绝对路径: {remotepath!r}"
+            )
 
         url = PcsNode.File.url()
         params = {
@@ -461,9 +472,10 @@ class BaiduPCS:
         `dest` must be a directory
         """
 
-        assert len(remotepaths) > 1 and all([p.startswith("/") for p in remotepaths]), (
-            "`sources`, `dest` must be absolute paths"
-        )
+        if len(remotepaths) <= 1 or not all(p.startswith("/") for p in remotepaths):
+            raise BaiduPCSError(
+                f"BaiduPCS.move: 源路径和目标路径必须是绝对路径: {remotepaths!r}"
+            )
 
         sources, dest = remotepaths[:-1], remotepaths[-1]
 
@@ -483,9 +495,10 @@ class BaiduPCS:
     def rename(self, source: str, dest: str) -> dict[str, Any]:
         """重命名远程路径。"""
 
-        assert all([p.startswith("/") for p in [source, dest]]), (
-            "`source`, `dest` must be absolute paths"
-        )
+        if not all(p.startswith("/") for p in (source, dest)):
+            raise BaiduPCSError(
+                f"BaiduPCS.rename: source 和 dest 必须是绝对路径: {source!r}, {dest!r}"
+            )
 
         param = [_from_to(source, dest)]
         return self.file_operate("move", param)
@@ -500,9 +513,10 @@ class BaiduPCS:
         `dest` must be a directory
         """
 
-        assert len(remotepaths) > 1 and all([p.startswith("/") for p in remotepaths]), (
-            "`sources`, `dest` must be absolute paths"
-        )
+        if len(remotepaths) <= 1 or not all(p.startswith("/") for p in remotepaths):
+            raise BaiduPCSError(
+                f"BaiduPCS.copy: 源路径和目标路径必须是绝对路径: {remotepaths!r}"
+            )
 
         sources, dest = remotepaths[:-1], remotepaths[-1]
 
@@ -520,9 +534,10 @@ class BaiduPCS:
 
     @assert_ok
     def remove(self, *remotepaths: str) -> dict[str, Any]:
-        assert all([p.startswith("/") for p in remotepaths]), (
-            "`sources`, `dest` must be absolute paths"
-        )
+        if not remotepaths or not all(p.startswith("/") for p in remotepaths):
+            raise BaiduPCSError(
+                f"BaiduPCS.remove: remotepaths 必须是非空的绝对路径列表: {remotepaths!r}"
+            )
 
         param = [{"path": p} for p in remotepaths]
         return self.file_operate("delete", param)
@@ -563,7 +578,8 @@ class BaiduPCS:
         Warning: `STOKEN` must be in `cookies`
         """
 
-        assert self._stoken, "`STOKEN` is not in `cookies`"
+        if not self._stoken:
+            raise BaiduPCSError("BaiduPCS.add_task: cookies 中缺少 STOKEN")
 
         params = {
             "channel": "chunlei",
@@ -594,7 +610,8 @@ class BaiduPCS:
         Warning: `STOKEN` must be in `cookies`
         """
 
-        assert self._stoken, "`STOKEN` is not in `cookies`"
+        if not self._stoken:
+            raise BaiduPCSError("BaiduPCS.add_magnet_task: cookies 中缺少 STOKEN")
 
         params = {
             "channel": "chunlei",
@@ -657,8 +674,12 @@ class BaiduPCS:
         period (int): The days for expiring. `0` means no expiring
         """
 
-        assert self._stoken, "`STOKEN` is not in `cookies`"
-        assert len(password) == 4, "`password` MUST be set"
+        if not self._stoken:
+            raise BaiduPCSError("BaiduPCS.share: cookies 中缺少 STOKEN")
+        if len(password) != 4:
+            raise BaiduPCSError(
+                f"BaiduPCS.share: password 必须为 4 个字符，实际长度为 {len(password)}"
+            )
 
         meta = self.meta(*remotepaths)
         fs_ids = [i["fs_id"] for i in meta["list"]]
@@ -726,6 +747,11 @@ class BaiduPCS:
         return resp.json()
 
     def shared_init_url(self, shared_url: str) -> str:
+        """生成分享验证页地址。
+
+        :param shared_url: 百度网盘分享链接
+        :return: 对应的分享验证页地址
+        """
         u = urlparse(shared_url)
         surl = u.path.split("/s/1")[-1]
         return f"https://pan.baidu.com/share/init?surl={surl}"
@@ -764,7 +790,12 @@ class BaiduPCS:
         return resp.json()
 
     @assert_ok
-    def getcaptcha(self, shared_url: str) -> str:
+    def getcaptcha(self, shared_url: str) -> dict[str, Any]:
+        """获取分享访问验证码信息。
+
+        :param shared_url: 百度网盘分享链接
+        :return: 服务端返回的验证码信息
+        """
         url = PanNode.Getcaptcha.url()
         params = {
             "prod": "shareverify",
@@ -782,6 +813,12 @@ class BaiduPCS:
         return resp.json()
 
     def get_vcode_img(self, vcode_img_url: str, shared_url: str) -> bytes:
+        """下载分享访问验证码图片。
+
+        :param vcode_img_url: 验证码图片地址
+        :param shared_url: 百度网盘分享链接，用于设置请求来源
+        :return: 验证码图片字节
+        """
         hdrs = dict(PAN_HEADERS)
         hdrs["Referer"] = self.shared_init_url(shared_url)
         resp = self._request_get(vcode_img_url, headers=hdrs)
@@ -796,7 +833,8 @@ class BaiduPCS:
         WARNING: this method is not threadsafe.
         """
 
-        assert self._stoken, "`STOKEN` is not in `cookies`"
+        if not self._stoken:
+            raise BaiduPCSError("BaiduPCS.shared_paths: cookies 中缺少 STOKEN")
 
         resp = self._request(Method.Get, shared_url, params=None)
         html = resp.text
@@ -805,7 +843,10 @@ class BaiduPCS:
         self._cookies_update(resp.cookies.get_dict())
 
         m = re.search(r"(?:yunData.setData|locals.mset)\((.+?)\);", html)
-        assert m, "`BaiduPCS.shared_paths`: Don't get shared info"
+        if not m:
+            raise BaiduPCSError(
+                f"BaiduPCS.shared_paths: 无法从分享页面解析数据: {shared_url!r}"
+            )
 
         shared_data = m.group(1)
         return json.loads(shared_data)
@@ -814,7 +855,8 @@ class BaiduPCS:
     def list_shared_paths(
         self, sharedpath: str, uk: int, share_id: int, page: int = 1, size: int = 100
     ) -> dict[str, Any]:
-        assert self._stoken, "`STOKEN` is not in `cookies`"
+        if not self._stoken:
+            raise BaiduPCSError("BaiduPCS.list_shared_paths: cookies 中缺少 STOKEN")
 
         url = PanNode.SharedPathList.url()
         params = {
@@ -877,7 +919,7 @@ class BaiduPCS:
         bduss = self._bduss
         timestamp = str(now_timestamp())
         model = get_phone_model(bduss)
-        phoneIMEIStr = sum_IMEI(bduss)
+        phoneIMEIStr = sum_imei(bduss)
 
         data = {
             "bdusstoken": bduss + "|null",
@@ -948,7 +990,7 @@ class BaiduPCS:
         resp = self._request(Method.Get, url, params=params)
         return resp.json()
 
-    @timeout_cache(1 * 60 * 60)  # 1 hour timeout
+    @ttl_cache(ttl=1 * 60 * 60)
     def download_link(self, remotepath: str, pcs: bool = False) -> str | None:
         if pcs:
             return (
@@ -1025,7 +1067,7 @@ class BaiduPCS:
         self,
         remotepath: str,
         max_chunk_size: int = MAX_CHUNK_SIZE,
-        callback: Callable[..., None] = None,
+        callback: Callable[..., None] | None = None,
         encrypt_password: bytes = b"",
         pcs: bool = False,
     ) -> RangeRequestIO | None:
