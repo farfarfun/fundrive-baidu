@@ -10,6 +10,7 @@
 - 凭据、路径、分享密码等运行时校验由 `assert` 改为显式条件判断并抛出 `BaiduPCSError`，避免在 Python 优化模式下被跳过而失去校验
 - 修复 `_request`/`remote_path_exists`/`RapidUploadInfo.list` 等处的可变默认参数（`{}`/`[]`）跨调用共享状态问题
 - `phone.py` 的 `sum_IMEI` 重命名为 `sum_imei`（`snake_case`），旧名称保留为带 `DeprecationWarning` 的兼容入口
+- `common/io.py` 的 `_request` 请求失败日志误用 stdlib logging 的 `%s` 占位符，farlog（loguru）不支持该语法，参数被静默丢弃；改为 `{}` 占位符
 
 ### 新增
 
