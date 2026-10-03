@@ -947,7 +947,7 @@ class AutoDecryptRequest:
                     self._method, self._url, headers=headers, **self._kwargs
                 )
                 if not resp.ok:
-                    logger.warning(  # noqa: PLE1205 - farlog(loguru) 用 {} 占位符，ruff 的 pylint 检查误判为 stdlib logging
+                    logger.warning(
                         "`{}._request` request error: status_code: {}, body: {}",
                         self.__class__.__name__,
                         resp.status_code,
@@ -964,7 +964,7 @@ class AutoDecryptRequest:
                 self._parse_rapid_upload_info(resp)
                 break
             except Exception as err:
-                logger.warning(  # noqa: PLE1205 - farlog(loguru) 用 {} 占位符，ruff 的 pylint 检查误判为 stdlib logging
+                logger.warning(
                     "`{}._request` request error: {}",
                     self.__class__.__name__,
                     err,
