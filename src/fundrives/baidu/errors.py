@@ -1,6 +1,9 @@
+"""百度网盘接口的错误码与异常定义。"""
+
 from functools import wraps
 from typing import Any
 
+#: 百度网盘接口 ``errno``/``error_code`` 到中文说明的映射。
 ERRORS = {
     0: 0,
     -1: "由于您分享了违反相关法律法规的文件，分享功能已被禁用，之前分享出去的文件不受影响。",
@@ -112,17 +115,35 @@ ERRORS = {
     100001: "文件被封",
 }
 
+#: 错误码不在 :data:`ERRORS` 里时使用的兜底说明。
 UNKNOWN_ERROR = "未知错误"
 
 
 class BaiduPCSError(Exception):
+    """百度网盘相关操作的统一异常。
+
+    既用于接口返回的业务错误（带 ``error_code``），也用于参数校验失败和底层
+    网络异常的包装（``error_code`` 为 ``None``）。
+    """
+
     def __init__(self, message: str, error_code: int | None = None, cause=None):
+        """
+        :param message: 错误说明
+        :param error_code: 接口返回的错误码，非接口错误时为 ``None``
+        :param cause: 触发本异常的原始异常，会挂到 ``__cause__`` 上
+        """
         self.__cause__ = cause
         self.error_code = error_code
         super().__init__(message)
 
 
 def parse_errno(error_code: int, info: Any = None) -> BaiduPCSError | None:
+    """把接口错误码翻译成异常对象。
+
+    :param error_code: 接口返回的错误码，``0`` 表示成功
+    :param info: 错误码不在 :data:`ERRORS` 里时用作说明的补充信息
+    :return: 对应的 :class:`BaiduPCSError`；``error_code`` 为 ``0`` 时返回 ``None``
+    """
     if error_code != 0:
         mean = ERRORS.get(error_code, info or UNKNOWN_ERROR)
         msg = f"error_code: {error_code}, message: {mean}"
@@ -131,10 +152,17 @@ def parse_errno(error_code: int, info: Any = None) -> BaiduPCSError | None:
 
 
 def assert_ok(func):
-    """Assert the errno of response is not 0"""
+    """装饰器：校验被装饰函数返回的原始响应里错误码为 0，否则抛异常。
+
+    兼容 ``errno`` 与 ``error_code`` 两种字段名，两个都没有时按成功处理。
+
+    :param func: 返回接口原始响应字典的函数
+    :return: 包装后的函数，返回值与原函数一致
+    """
 
     @wraps(func)
     def check(*args, **kwargs):
+        """调用原函数并在错误码非 0 时抛出 :class:`BaiduPCSError`。"""
         info = func(*args, **kwargs)
         error_code = info.get("errno")
         if error_code is None:
