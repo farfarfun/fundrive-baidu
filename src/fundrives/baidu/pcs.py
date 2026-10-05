@@ -16,6 +16,7 @@ from urllib.parse import quote_plus, urlparse
 
 import requests  # type: ignore
 from farcache import ttl_cache
+from farlog import getLogger
 from requests_toolbelt import MultipartEncoder, MultipartEncoderMonitor
 
 from .common.crypto import calu_md5, calu_sha1
@@ -24,6 +25,8 @@ from .common.io import MAX_CHUNK_SIZE, RangeRequestIO
 from .errors import BaiduPCSError, assert_ok
 from .phone import get_phone_model, sum_imei
 from .utils import dump_json
+
+logger = getLogger("fundrive")
 
 PCS_BAIDU_COM = "https://pcs.baidu.com"
 # PCS_BAIDU_COM = 'http://127.0.0.1:8888'
@@ -44,6 +47,16 @@ PCS_APP_ID = "778750"
 PAN_APP_ID = "250528"
 
 M3u8Type = Literal["M3U8_AUTO_720", "M3U8_AUTO_480"]
+
+#: 所有 HTTP 请求的默认超时 ``(连接超时, 读超时)``，单位秒。
+#: 不设超时的话，服务端不响应时整个进程会无限挂起。
+DEFAULT_TIMEOUT = (10, 60)
+
+#: :meth:`BaiduPCS.download_link` 因调用过频被接口拒绝时的最大重试次数。
+DOWNLOAD_LINK_MAX_RETRIES = 5
+
+#: :meth:`BaiduPCS.download_link` 每次重试之间的等待秒数。
+DOWNLOAD_LINK_RETRY_INTERVAL = 2
 
 
 def _from_to(f: str, t: str) -> dict[str, str]:
@@ -246,9 +259,12 @@ class BaiduPCS:
         :param headers: 自定义请求头，缺省按域名选择 PCS/PAN 默认头
         :param data: 请求体
         :param files: 上传文件表单
+        :param kwargs: 透传给 ``requests`` 的其余参数，可用 ``timeout`` 覆盖默认超时
         :return: ``requests`` 响应对象（不校验业务 errno）
         :raises BaiduPCSError: 底层网络请求抛异常时包装后抛出
         """
+        kwargs.setdefault("timeout", DEFAULT_TIMEOUT)
+
         if params and isinstance(params, dict):
             app_id = self._app_id(url)
             params["app_id"] = app_id
@@ -281,8 +297,11 @@ class BaiduPCS:
         headers: dict[str, str] | None = None,
         **kwargs,
     ) -> requests.Response:
-        """以 GET 方式发起请求，是 :meth:`_request` 的简写。"""
-        return self._request(Method.Get, url, params=params, headers=headers)
+        """以 GET 方式发起请求，是 :meth:`_request` 的简写。
+
+        :param kwargs: 透传给 :meth:`_request`，可用 ``timeout``/``stream`` 等覆盖默认值
+        """
+        return self._request(Method.Get, url, params=params, headers=headers, **kwargs)
 
     @assert_ok
     def quota(self) -> dict[str, Any]:
@@ -1190,7 +1209,10 @@ class BaiduPCS:
         }
 
         resp = requests.post(
-            "http://tieba.baidu.com/c/s/login", headers=headers, data=data
+            "http://tieba.baidu.com/c/s/login",
+            headers=headers,
+            data=data,
+            timeout=DEFAULT_TIMEOUT,
         )
         return resp.json()
 
@@ -1212,7 +1234,7 @@ class BaiduPCS:
             "client_logid": str(now_timestamp() * 1000),
             "Connection": "Keep-Alive",
         }
-        resp = requests.get(url, headers=headers, params=None)
+        resp = requests.get(url, headers=headers, params=None, timeout=DEFAULT_TIMEOUT)
         return resp.json()
 
     @assert_ok
@@ -1233,13 +1255,14 @@ class BaiduPCS:
         """获取文件的直链下载地址，结果缓存 1 小时。
 
         非 ``pcs`` 模式下会带签名向 ``locatedownload`` 接口要地址；接口因调用过频
-        返回非 200 时会等待 2 秒后重试，直到拿到结果或判定失败。
+        返回非 200 时会等待 :data:`DOWNLOAD_LINK_RETRY_INTERVAL` 秒后重试，最多重试
+        :data:`DOWNLOAD_LINK_MAX_RETRIES` 次。
 
         .. warning:: 返回的直链带有签名，等同于临时凭据，不要写入日志。
 
         :param remotepath: 远程文件绝对路径
         :param pcs: 是否直接拼 ``pcs.baidu.com`` 的下载地址（不走签名接口）
-        :return: 直链地址；文件被和谐、没有可用地址或拿到 403 时返回 ``None``
+        :return: 直链地址；文件被和谐、没有可用地址、拿到 403 或重试耗尽时返回 ``None``
         """
         if pcs:
             return (
@@ -1253,7 +1276,7 @@ class BaiduPCS:
         devuid = calu_md5(bduss).upper() + "|0"
         enc = calu_sha1(bduss)
 
-        while True:
+        for attempt in range(DOWNLOAD_LINK_MAX_RETRIES):
             timestamp = str(now_timestamp())
 
             rand = calu_sha1(
@@ -1289,12 +1312,21 @@ class BaiduPCS:
                 url + "?" + params_str, headers=headers, method="GET"
             )  # type: ignore
             try:
-                resp = urllib.request.urlopen(req)  # type: ignore
+                resp = urllib.request.urlopen(req, timeout=DEFAULT_TIMEOUT[1])  # type: ignore
 
                 # Error: "user is not authorized"
-                # This error occurs when the method is called by too many times
+                # 调用过于频繁时会走到这里；重试有上限，耗尽后返回 None，
+                # 不能像原实现那样无限 `continue` 下去。
                 if resp.status != 200:
-                    time.sleep(2)
+                    if attempt == DOWNLOAD_LINK_MAX_RETRIES - 1:
+                        logger.warning(
+                            "`BaiduPCS.download_link` 重试 {} 次后仍未拿到下载地址，"
+                            "最后一次状态码 {}",
+                            DOWNLOAD_LINK_MAX_RETRIES,
+                            resp.status,
+                        )
+                        return None
+                    time.sleep(DOWNLOAD_LINK_RETRY_INTERVAL)
                     continue
 
                 info = json.loads(resp.read())
@@ -1311,6 +1343,9 @@ class BaiduPCS:
             except HTTPError:
                 # 403 code could occor at unavailable downloading url, #97
                 return None
+
+        # 理论上走不到（上面最后一次重试会显式 return），兜底保证函数总有返回值
+        return None
 
     def file_stream(
         self,

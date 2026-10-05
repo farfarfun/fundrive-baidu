@@ -46,6 +46,17 @@ logger = getLogger(__name__, level=_LOG_LEVEL)
 
 READ_SIZE = 65535
 
+#: Range 请求的默认超时 ``(连接超时, 读超时)``，单位秒。
+#: 不设超时的话，服务端不响应时读取会无限挂起。
+DEFAULT_TIMEOUT = (10, 60)
+
+#: 服务端返回 ``user is not authorized`` 时的最大重试次数。
+#: 原实现是无上限的 ``while True``，服务端持续拒绝时会变成永不退出的热循环。
+REQUEST_MAX_RETRIES = 5
+
+#: 每次重试之间的等待秒数。
+REQUEST_RETRY_INTERVAL = 2
+
 # This is the threshold of range request setted by Baidu server
 MAX_CHUNK_SIZE = 50 * constant.OneM
 
@@ -849,6 +860,7 @@ class AutoDecryptRequest:
         **kwargs,
     ):
         kwargs["stream"] = True
+        kwargs.setdefault("timeout", DEFAULT_TIMEOUT)
 
         self._method = method
         self._url = url
@@ -941,7 +953,7 @@ class AutoDecryptRequest:
         headers = dict(self._headers or {})
         headers["Range"] = "bytes={}-{}".format(*_range)
 
-        while True:
+        for attempt in range(REQUEST_MAX_RETRIES):
             try:
                 resp = self._session.request(
                     self._method, self._url, headers=headers, **self._kwargs
@@ -958,8 +970,13 @@ class AutoDecryptRequest:
                     # Error: 31326: user is not authorized, hitcode:117
                     # Request is temporally blocked.
                     # This error occurs when url is from `BaiduPCS.download_link(..., pcs=True)`
-                    if b"user is not authorized" in resp.content:
-                        time.sleep(2)
+                    # 重试有上限：服务端持续拒绝时不能无限 `continue` 下去，
+                    # 否则调用方会卡在这个热循环里永不返回。
+                    if (
+                        b"user is not authorized" in resp.content
+                        and attempt < REQUEST_MAX_RETRIES - 1
+                    ):
+                        time.sleep(REQUEST_RETRY_INTERVAL)
                         continue
                 self._parse_rapid_upload_info(resp)
                 break
@@ -1055,6 +1072,7 @@ class RangeRequestIO(IO):
         **kwargs,
     ):
         kwargs["stream"] = True
+        kwargs.setdefault("timeout", DEFAULT_TIMEOUT)
 
         self._method = method
         self._url = url

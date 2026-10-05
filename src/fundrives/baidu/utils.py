@@ -56,9 +56,10 @@ def human_size(size: int) -> str:
             v = f"{s:3.1f}"
             break
         s /= 1024.0
-    # 超过 1024TB 时循环不会 break，这里兜底，避免返回 " TB" 这种缺数字的结果
+    # 超过 1024TB 时循环始终不会 break，最后一轮已多除了一次 1024；
+    # 这里乘回去并兜底，避免返回 " TB" 这种缺数字、且数值偏小 1024 倍的结果
     if not v:
-        v = f"{s:3.1f}"
+        v = f"{s * 1024:3.1f}"
     v = v.removesuffix(".0")
     return f"{v} {t}"
 
