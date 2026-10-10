@@ -1,6 +1,6 @@
 [project]
 name = "fundrive-baidu"
-version = "1.0.13"
+version = "2.0.90"
 description = "百度网盘（BaiduPCS）云存储 API 封装"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -14,7 +14,6 @@ email = "niuliangtao@qq.com"
 [[project.authors]]
 name = "farfarfun"
 email = "farfarfun@qq.com"
-
 [[project.maintainers]]
 name = "牛哥"
 email = "niuliangtao@qq.com"
@@ -22,7 +21,6 @@ email = "niuliangtao@qq.com"
 [[project.maintainers]]
 name = "farfarfun"
 email = "farfarfun@qq.com"
-
 [project.urls]
 Organization = "https://github.com/farfarfun"
 Repository = "https://github.com/farfarfun/fundrive-baidu"
