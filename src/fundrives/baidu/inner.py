@@ -7,7 +7,7 @@
 import os
 from base64 import standard_b64encode
 from collections import namedtuple
-from typing import NamedTuple
+from typing import Any, Mapping, NamedTuple
 from urllib.parse import unquote
 
 
@@ -141,7 +141,7 @@ class PcsFile(NamedTuple):
     dl_link: str | None = None
 
     @staticmethod
-    def from_(info) -> "PcsFile":
+    def from_(info: Mapping[str, Any]) -> "PcsFile":
         """从接口返回的原始条目构造 :class:`PcsFile`。
 
         :param info: 接口返回的单条文件信息字典
@@ -178,7 +178,7 @@ class PcsMagnetFile(NamedTuple):
     size: int | None = None
 
     @staticmethod
-    def from_(info) -> "PcsMagnetFile":
+    def from_(info: Mapping[str, Any]) -> "PcsMagnetFile":
         """从 ``magnet_info`` 接口返回的原始条目构造 :class:`PcsMagnetFile`。
 
         :param info: 接口返回的单条磁力文件信息字典
@@ -216,7 +216,7 @@ class PcsSharedLink(NamedTuple):
     ctime: int | None = None
 
     @staticmethod
-    def from_(info) -> "PcsSharedLink":
+    def from_(info: Mapping[str, Any]) -> "PcsSharedLink":
         """从分享记录接口返回的原始条目构造 :class:`PcsSharedLink`。
 
         :param info: 接口返回的单条分享记录字典
@@ -293,7 +293,7 @@ class PcsSharedPath(NamedTuple):
     bdstoken: str | None = None
 
     @staticmethod
-    def from_(info) -> "PcsSharedPath":
+    def from_(info: Mapping[str, Any]) -> "PcsSharedPath":
         """从分享内容接口返回的原始条目构造 :class:`PcsSharedPath`。
 
         分享首页与子目录列表两个接口的字段不一样：前者直接给 ``path``，后者给
@@ -434,7 +434,7 @@ class CloudTask(NamedTuple):
     ftime: int  # finished time
 
     @staticmethod
-    def from_(info) -> "CloudTask":
+    def from_(info: Mapping[str, Any]) -> "CloudTask":
         """从离线任务接口返回的原始条目构造 :class:`CloudTask`。
 
         不同接口的字段名不一致（``size``/``file_size``、``save_path``/``path``），

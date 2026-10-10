@@ -42,7 +42,8 @@ def calu_file_md5(localpath: str) -> str:
 
 
 def calu_md5(buf: str | bytes, encoding="utf-8") -> str:
-    assert isinstance(buf, (str, bytes))
+    if not isinstance(buf, (str, bytes)):
+        raise TypeError("buf 必须是 str 或 bytes")
 
     if isinstance(buf, str):
         buf = buf.encode(encoding)
@@ -63,7 +64,8 @@ def calu_crc32_and_md5(stream: IO, chunk_size: int) -> tuple[int, str]:
 
 
 def calu_sha1(buf: str | bytes, encoding="utf-8") -> str:
-    assert isinstance(buf, (str, bytes))
+    if not isinstance(buf, (str, bytes)):
+        raise TypeError("buf 必须是 str 或 bytes")
 
     if isinstance(buf, str):
         buf = buf.encode(encoding)
@@ -74,27 +76,36 @@ U8_LIST = list(range(1 << 8))
 
 
 def random_bytes(size: int, seed: Any = None) -> bytes:
-    """Generate random bytes"""
+    """生成可复现的随机字节。"""
 
     rg = random.Random(seed)
     return bytes(rg.sample(U8_LIST, size))
 
 
 def random_sys_bytes(size: int) -> bytes:
-    """Generate random bytes with `os.urandom`"""
+    """使用 :func:`os.urandom` 生成随机字节。"""
 
     return os.urandom(size)
 
 
 def padding_key(key: str | bytes, length: int = 0, value: bytes = b"\xff") -> bytes:
-    """padding key with `value`"""
+    """将密钥补齐到指定长度。
 
-    assert len(value) < 2
+    :param key: 待补齐的字符串或字节串
+    :param length: 补齐后的字节长度
+    :param value: 补齐字节；空字节串表示使用系统随机字节
+    :return: 补齐后的字节串
+    :raises ValueError: 补齐字节超过一个字节或密钥长度超出目标长度
+    """
+
+    if len(value) >= 2:
+        raise ValueError("value 至多包含一个字节")
 
     if isinstance(key, str):
         key = key.encode("utf-8")
 
-    assert len(key) <= length
+    if len(key) > length:
+        raise ValueError("key 长度不能超过目标长度")
 
     pad_len = length - len(key)
     if value:
@@ -230,8 +241,10 @@ class ChaCha20Cryptography(Cryptography):
     """
 
     def __init__(self, key: bytes, nonce: bytes):
-        assert len(key) == 32
-        assert len(nonce) == 16
+        if len(key) != 32:
+            raise ValueError("ChaCha20 key 必须为 32 字节")
+        if len(nonce) != 16:
+            raise ValueError("ChaCha20 nonce 必须为 16 字节")
 
         self._key = key
         self._nonce = nonce
@@ -259,8 +272,10 @@ class ChaCha20Cryptography(Cryptography):
 
 class AES256CBCCryptography(Cryptography):
     def __init__(self, key: bytes, iv: bytes):
-        assert len(key) == 32
-        assert len(iv) == 16
+        if len(key) != 32:
+            raise ValueError("AES-256-CBC key 必须为 32 字节")
+        if len(iv) != 16:
+            raise ValueError("AES-CBC IV 必须为 16 字节")
 
         self._key = key
         self._iv = iv
@@ -268,7 +283,8 @@ class AES256CBCCryptography(Cryptography):
         self.reset()
 
     def encrypt(self, data: bytes) -> bytes:
-        assert len(data) % 16 == 0
+        if len(data) % 16 != 0:
+            raise ValueError("AES-CBC 加密数据长度必须是 16 的倍数")
         return self._encryptor.update(data)
 
     def decrypt(self, data: bytes) -> bytes:
