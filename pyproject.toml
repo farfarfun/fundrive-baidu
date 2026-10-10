@@ -1,6 +1,6 @@
 [project]
 name = "fundrive-baidu"
-version = "2.0.90"
+version = "2.0.91"
 description = "百度网盘（BaiduPCS）云存储 API 封装"
 readme = "README.md"
 requires-python = ">=3.10"
