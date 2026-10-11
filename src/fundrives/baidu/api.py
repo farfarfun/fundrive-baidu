@@ -210,7 +210,7 @@ class BaiduPCSApi:
         self,
         io: IO,
         remotepath: str,
-        ondup="overwrite",
+        ondup: str = "overwrite",
         callback: Callable[[MultipartEncoderMonitor], None] | None = None,
     ) -> PcsFile:
         """上传一个 IO 对象到 `remotepath`。
@@ -238,7 +238,7 @@ class BaiduPCSApi:
         remotepath: str,
         local_ctime: int | None = None,
         local_mtime: int | None = None,
-        ondup="overwrite",
+        ondup: str = "overwrite",
     ) -> PcsFile:
         """秒传文件。
 
@@ -284,7 +284,7 @@ class BaiduPCSApi:
         remotepath: str,
         local_ctime: int | None = None,
         local_mtime: int | None = None,
-        ondup="overwrite",
+        ondup: str = "overwrite",
     ) -> PcsFile:
         """合并已上传的分片到 `remotepath`。
 
@@ -965,7 +965,7 @@ class BaiduPCSApi:
         return name in names
 
     def list_all_sub_paths(
-        self, shared_path: str, uk: int, share_id: int, bdstoken: str, size=100
+        self, shared_path: str, uk: int, share_id: int, bdstoken: str, size: int = 100
     ) -> list[PcsSharedPath]:
         """分页列出分享目录 `shared_path` 下的全部子路径。
 

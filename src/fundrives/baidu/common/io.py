@@ -302,7 +302,8 @@ class EncryptIO(IO):
         if hasattr(self, "_total_head"):
             return self._total_head
 
-        assert len(self._salt) == 8
+        if len(self._salt) != 8:
+            raise RuntimeError("加密盐长度必须为 8 字节")
 
         ori_head = padding_key(
             BAIDUPCS_PY_CRYPTO_MAGIC_CODE
@@ -900,7 +901,8 @@ class AutoDecryptRequest:
         """Remote content length"""
 
         self._init()
-        assert self._content_length
+        if self._content_length is None:
+            raise RuntimeError("无法获取远程内容长度")
         return self._content_length
 
     @property
@@ -908,7 +910,8 @@ class AutoDecryptRequest:
         """Remote content length"""
 
         self._init()
-        assert self._content_length
+        if self._content_length is None:
+            raise RuntimeError("无法获取远程内容长度")
         return self._content_md5
 
     @property
@@ -916,7 +919,8 @@ class AutoDecryptRequest:
         """Remote content length"""
 
         self._init()
-        assert self._content_length
+        if self._content_length is None:
+            raise RuntimeError("无法获取远程内容长度")
         return self._content_crc32
 
     def _parse_rapid_upload_info(self, resp: Response):
@@ -997,7 +1001,7 @@ class AutoDecryptRequest:
         return resp
 
     def rangeable(self) -> bool:
-        """Is support uncontinue range request?"""
+        """判断是否支持不连续的范围请求。"""
 
         self._init()
 
@@ -1006,11 +1010,12 @@ class AutoDecryptRequest:
         return self._dio.seekable()
 
     def __len__(self) -> int:
-        """The decrypted data length"""
+        """返回解密后数据的长度。"""
 
         self._init()
 
-        assert self._content_length
+        if self._content_length is None:
+            raise RuntimeError("无法获取远程内容长度")
         return self._content_length - self._total_head_len
 
     def read(self, _range: tuple[int, int]) -> Generator[bytes, None, None]:

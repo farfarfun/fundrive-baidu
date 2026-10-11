@@ -12,7 +12,12 @@ def sure_release(semaphore: Semaphore, func, *args, **kwargs):
 
 
 def retry(times: int, except_callback: Callable[..., Any] | None = None):
-    """Retry times when func fails"""
+    """为函数调用增加失败重试。
+
+    :param times: 最大重试次数；小于 0 时持续重试
+    :param except_callback: 每次失败后接收异常和当前次数的回调
+    :return: 接收原函数并返回带重试逻辑的装饰器
+    """
 
     def wrap(func):
         @wraps(func)
