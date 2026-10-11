@@ -22,9 +22,9 @@ email = "niuliangtao@qq.com"
 name = "farfarfun"
 email = "farfarfun@qq.com"
 [project.urls]
-Organization = "https://github.com/farfarfun"
-Repository = "https://github.com/farfarfun/fundrive-baidu"
-Releases = "https://github.com/farfarfun/fundrive-baidu/releases"
+Organization = "https://github.com/farfarfun-fundrive"
+Repository = "https://github.com/farfarfun-fundrive/fundrive-baidu"
+Releases = "https://github.com/farfarfun-fundrive/fundrive-baidu/releases"
 
 [build-system]
 requires = ["hatchling"]

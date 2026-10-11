@@ -1,7 +1,7 @@
 # fundrive-baidu
 
 百度网盘（BaiduPCS）Python API 封装，提供文件列表/搜索、上传下载、移动复制、
-离线下载、分享与转存等常用能力，供 [fundrive](https://github.com/farfarfun/fundrive)
+离线下载、分享与转存等常用能力，供 [fundrive](https://github.com/farfarfun-fundrive/fundrive)
 及其他项目以统一接口接入百度网盘。
 
 ## 安装
