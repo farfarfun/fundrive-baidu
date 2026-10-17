@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync --group dev
+
+      - name: Lint
+        run: uv run ruff check src tests
+
+      - name: Format check
+        run: uv run ruff format --check src tests
+
+      - name: Test
+        # 没收集到用例时 pytest 返回 5，CI 会失败，避免「空跑的绿灯」
+        run: uv run pytest -v
+
+      - name: Import smoke test (bare env, read-only-ish cwd)
+        # 在仓库外的空目录里 import：确认拿到的是装进环境的包，
+        # 而不是靠 cwd 恰好撞上 src/ 才能 import 成功。
+        run: |
+          PY="$PWD/.venv/bin/python"
+          cd "$(mktemp -d)"
+          "$PY" -c "import fundrives.baidu as m; print('OK', m.__file__)"
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+
+      - name: Build wheel & sdist
+        run: uv build
+
+      - name: Check metadata
+        run: uvx twine check dist/*
